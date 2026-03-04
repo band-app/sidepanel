@@ -161,6 +161,9 @@ export function SettingsPage({ onClose }: Props) {
                   placeholder='{"layout": {...}, "terminals": [...]}'
                   value={defaultsJson}
                   onChange={(e) => handleDefaultsChange(e.target.value)}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="off"
                   spellCheck={false}
                 />
                 {defaultsError && (

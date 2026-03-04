@@ -416,6 +416,32 @@ fn match_title_to_workspace(title: &str) -> Option<String> {
 /// 1. Get frontmost window PID + title via Accessibility API
 /// 2. Try CWD matching on descendant processes (works for any app)
 /// 3. Fall back to window title matching
+/// Check if the dashboard (our own process) is the frontmost application.
+fn is_dashboard_frontmost() -> bool {
+    get_frontmost_window()
+        .map(|(pid, _)| pid as u32 == std::process::id())
+        .unwrap_or(false)
+}
+
+/// Look up the worktree folder name for a given workspace ID.
+/// Returns the last path component of the worktree path, which is what
+/// VS Code displays in its window title (not the branch name).
+fn workspace_folder_name(workspace_id: &str) -> Option<String> {
+    let app_state = state::load_state().ok()?;
+    for proj in &app_state.projects {
+        for wt in &proj.worktrees {
+            let ws_id = format!("{}-{}", proj.name, wt.branch);
+            if ws_id == workspace_id {
+                return Path::new(&wt.path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn detect_frontmost_workspace() -> Option<String> {
     let (pid, title) = get_frontmost_window()?;
 
@@ -528,13 +554,15 @@ pub fn start_focus_polling(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         let mut last_active: Option<String> = None;
         let mut dashboard_raised = false;
+        let mut vscode_raised = false;
         loop {
             std::thread::sleep(Duration::from_millis(500));
 
             if let Some(ws_id) = detect_frontmost_workspace() {
+                // Always clear needs_attention for the focused workspace
+                clear_needs_attention(&ws_id);
+
                 if last_active.as_deref() != Some(ws_id.as_str()) {
-                    // Workspace gained focus — clear needs_attention if set
-                    clear_needs_attention(&ws_id);
                     last_active = Some(ws_id.clone());
                     write_active_marker(&ws_id);
                 }
@@ -545,8 +573,22 @@ pub fn start_focus_polling(app_handle: tauri::AppHandle) {
                     });
                     dashboard_raised = true;
                 }
+                vscode_raised = false;
+            } else if is_dashboard_frontmost() {
+                // Dashboard gained focus — raise VS Code once for the active workspace
+                if !vscode_raised {
+                    if let Some(ref ws_id) = last_active {
+                        clear_needs_attention(ws_id);
+                        if let Some(folder) = workspace_folder_name(ws_id) {
+                            raise_vscode_window(&folder);
+                        }
+                    }
+                    vscode_raised = true;
+                }
+                dashboard_raised = false;
             } else {
                 dashboard_raised = false;
+                vscode_raised = false;
             }
         }
     });

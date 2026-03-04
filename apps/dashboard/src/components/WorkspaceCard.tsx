@@ -1,9 +1,12 @@
 import { useEffect, useRef } from "react";
 import { AgentStatusBadge } from "@/components/AgentStatusBadge";
+import { GitStatusIndicator } from "@/components/GitStatusIndicator";
+import { CIStatusIndicator } from "@/components/CIStatusIndicator";
 import {
   useDashboardStore,
   WorktreeInfo,
   WorkspaceStatus,
+  WorkspaceBranchStatus,
 } from "@/stores/dashboard-store";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,10 +22,11 @@ interface Props {
   projectName: string;
   defaultBranch: string;
   status?: WorkspaceStatus;
+  branchStatus?: WorkspaceBranchStatus;
   isFocused?: boolean;
 }
 
-export function WorkspaceCard({ worktree, projectName, defaultBranch, status, isFocused }: Props) {
+export function WorkspaceCard({ worktree, projectName, defaultBranch, status, branchStatus, isFocused }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,6 +52,9 @@ export function WorkspaceCard({ worktree, projectName, defaultBranch, status, is
         <span className={`text-xs truncate ${isActive ? "font-semibold text-foreground" : "font-medium"}`} style={isActive ? undefined : { color: "oklch(0.7 0 0)" }}>{worktree.branch}</span>
         <AgentStatusBadge agent={status?.agent} />
       </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {branchStatus && <GitStatusIndicator git={branchStatus.git} />}
+        {branchStatus && <CIStatusIndicator ci={branchStatus.ci} />}
       <DropdownMenu>
         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
           <Button
@@ -84,6 +91,7 @@ export function WorkspaceCard({ worktree, projectName, defaultBranch, status, is
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </div>
   );
 }

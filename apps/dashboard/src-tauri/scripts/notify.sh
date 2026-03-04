@@ -5,7 +5,9 @@
 
 set -euo pipefail
 
-HOOK_EVENT="${CLAUDE_HOOK_EVENT:-}"
+# Read hook input from stdin (Claude Code passes JSON with hook_event_name)
+INPUT=$(cat)
+HOOK_EVENT=$(echo "$INPUT" | /usr/bin/python3 -c "import json,sys; print(json.load(sys.stdin).get('hook_event_name',''))" 2>/dev/null || true)
 if [ -z "$HOOK_EVENT" ]; then
   exit 0
 fi
@@ -16,7 +18,7 @@ CURRENT_DIR=$(pwd -P)
 # Look up project and branch from state.json (single source of truth)
 MATCH=""
 if [ -f "$STATE_FILE" ]; then
-  MATCH=$(python3 - "$STATE_FILE" "$CURRENT_DIR" <<'PYEOF'
+  MATCH=$(/usr/bin/python3 - "$STATE_FILE" "$CURRENT_DIR" <<'PYEOF'
 import json, sys, os
 try:
     state = json.load(open(sys.argv[1]))

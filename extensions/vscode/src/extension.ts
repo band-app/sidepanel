@@ -32,29 +32,22 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Register focus tracking early — before any async work
+  // When user focuses the window, clear needs_attention → waiting
   context.subscriptions.push(
     vscode.window.onDidChangeWindowState(async (e) => {
-      log.appendLine(`[focus] Window state changed: focused=${e.focused}, reporter=${!!reporter}, workspaceId=${reporter?.getWorkspaceId()}`);
-      if (e.focused && reporter) {
+      if (e.focused && reporter && monitor) {
         try {
-          await reporter.reportFocused();
-          // When user focuses the window, clear needs_attention/working → waiting
-          if (monitor) {
-            const state = monitor.getState();
-            if (state.status === "needs_attention") {
-              await reporter.report({ status: "waiting", lastActivity: new Date() });
-            }
+          const state = monitor.getState();
+          if (state.status === "needs_attention") {
+            await reporter.report({ status: "waiting", lastActivity: new Date() });
+            log.appendLine(`[focus] Cleared needs_attention for ${reporter.getWorkspaceId()}`);
           }
-          log.appendLine(`[focus] reportFocused() succeeded for ${reporter.getWorkspaceId()}`);
         } catch (err) {
-          log.appendLine(`[focus] reportFocused() failed: ${err}`);
+          log.appendLine(`[focus] Failed to clear needs_attention: ${err}`);
         }
       }
     })
   );
-
-  log.appendLine(`[focus] Initial window focused: ${vscode.window.state.focused}`);
 
   // Auto-setup if config exists
   const workspaceFolders = vscode.workspace.workspaceFolders;
@@ -63,12 +56,6 @@ export async function activate(context: vscode.ExtensionContext) {
     if (config) {
       log.appendLine(`Config loaded for workspace: ${config.workspaceId}`);
       await runSetupWithConfig(config, workspaceFolders[0].uri.fsPath);
-
-      // Mark as active on initial setup if window is focused
-      if (vscode.window.state.focused && reporter) {
-        await reporter.reportFocused();
-        log.appendLine("[focus] Wrote initial active state");
-      }
     } else {
       log.appendLine("No config found");
     }

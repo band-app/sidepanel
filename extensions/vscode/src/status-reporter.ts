@@ -51,14 +51,6 @@ export class StatusReporter {
     );
   }
 
-  async reportFocused(): Promise<void> {
-    const activeFile = path.join(this.statusDir, "active.json");
-    await fs.promises.writeFile(
-      activeFile,
-      JSON.stringify({ workspaceId: this.config.workspaceId })
-    );
-  }
-
   async cleanup(): Promise<void> {
     try {
       await fs.promises.unlink(this.statusFile);

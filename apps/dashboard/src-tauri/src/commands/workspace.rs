@@ -17,9 +17,7 @@ pub fn workspace_create(project: String, branch: String, base: Option<String>) -
         return Ok(());
     }
 
-    let band_home = state::band_home();
-    let target_path = band_home
-        .join("worktrees")
+    let target_path = state::worktrees_dir()
         .join(&project)
         .join(&branch);
     let target_path_str = target_path.to_string_lossy().to_string();

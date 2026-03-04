@@ -137,6 +137,42 @@ fn get_frontmost_window() -> Option<(i32, String)> {
     }
 }
 
+// --- Bundle ID lookup via NSRunningApplication ---
+
+fn get_bundle_id(pid: i32) -> Option<String> {
+    unsafe {
+        type MsgSendPid =
+            unsafe extern "C" fn(*const c_void, *const c_void, i32) -> *const c_void;
+        type MsgSend = unsafe extern "C" fn(*const c_void, *const c_void) -> *const c_void;
+
+        let msg_pid: MsgSendPid = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+        let msg: MsgSend = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+
+        let cls = objc_getClass(b"NSRunningApplication\0".as_ptr() as *const i8);
+        if cls.is_null() {
+            return None;
+        }
+
+        let sel = sel_registerName(
+            b"runningApplicationWithProcessIdentifier:\0".as_ptr() as *const i8,
+        );
+        let app = msg_pid(cls, sel, pid);
+        if app.is_null() {
+            return None;
+        }
+
+        let sel = sel_registerName(b"bundleIdentifier\0".as_ptr() as *const i8);
+        let bundle_id = msg(app, sel);
+        if bundle_id.is_null() {
+            return None;
+        }
+
+        cfstring_to_string(bundle_id)
+    }
+}
+
+const VSCODE_BUNDLE_ID: &str = "com.microsoft.VSCode";
+
 // --- libproc: process enumeration and CWD lookup ---
 
 fn get_all_pids() -> Vec<i32> {
@@ -394,9 +430,14 @@ fn detect_frontmost_workspace() -> Option<String> {
         return Some(ws_id);
     }
 
-    // Fall back to window title matching
+    // Fall back to window title matching, but only for VS Code
+    // (other apps like Chrome can have titles that accidentally match workspace names)
     if !title.is_empty() {
-        return match_title_to_workspace(&title);
+        let is_vscode = get_bundle_id(pid)
+            .map_or(false, |id| id == VSCODE_BUNDLE_ID);
+        if is_vscode {
+            return match_title_to_workspace(&title);
+        }
     }
 
     None

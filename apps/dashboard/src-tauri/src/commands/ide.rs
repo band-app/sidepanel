@@ -336,7 +336,7 @@ pub fn start_focus_polling() {
     std::thread::spawn(|| {
         let mut last_active: Option<String> = None;
         loop {
-            std::thread::sleep(Duration::from_secs(1));
+            std::thread::sleep(Duration::from_millis(500));
 
             if let Some(ws_id) = detect_frontmost_workspace() {
                 if last_active.as_deref() != Some(ws_id.as_str()) {

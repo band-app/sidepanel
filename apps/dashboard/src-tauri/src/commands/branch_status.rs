@@ -25,14 +25,15 @@ pub struct CIStatus {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct WorkspaceBranchStatus {
+pub struct GitStatusEvent {
+    pub workspace_id: String,
     pub git: GitStatus,
-    pub ci: CIStatus,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct BranchStatusEvent {
-    pub statuses: HashMap<String, WorkspaceBranchStatus>,
+pub struct CIStatusEvent {
+    pub workspace_id: String,
+    pub ci: CIStatus,
 }
 
 pub struct BranchStatusPollerState(pub Arc<Mutex<Option<Arc<AtomicBool>>>>);
@@ -233,48 +234,84 @@ pub fn branch_status_watch_start(app: AppHandle) -> Result<(), String> {
             // CI poll every 30s (6 ticks of 5s), git fetch at same cadence
             let do_ci = tick_count % 6 == 0;
 
-            // git fetch at CI cadence — per unique project path
+            // Parallel git fetch at CI cadence — per unique project path
             if do_ci {
-                let mut fetched_paths = std::collections::HashSet::new();
-                for proj in &app_state.projects {
-                    if fetched_paths.insert(proj.path.clone()) {
-                        let _ = git::git_cmd()
-                            .args(["fetch", "--quiet", "--all"])
-                            .current_dir(&proj.path)
-                            .output();
+                let unique_paths: Vec<String> = {
+                    let mut seen = std::collections::HashSet::new();
+                    app_state
+                        .projects
+                        .iter()
+                        .filter_map(|p| {
+                            if seen.insert(p.path.clone()) {
+                                Some(p.path.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                };
+
+                std::thread::scope(|s| {
+                    for path in &unique_paths {
+                        s.spawn(move || {
+                            let _ = git::git_cmd()
+                                .args(["fetch", "--quiet", "--all"])
+                                .current_dir(path)
+                                .output();
+                        });
                     }
-                }
+                });
             }
 
-            let mut statuses: HashMap<String, WorkspaceBranchStatus> = HashMap::new();
-
+            // Emit git status per workspace immediately (fast, local)
             for proj in &app_state.projects {
                 for wt in &proj.worktrees {
                     let ws_id = format!("{}-{}", proj.name, wt.branch);
                     let git_status = get_git_status(&wt.path);
 
-                    let ci_status = if do_ci {
-                        let ci = get_ci_status(&wt.path, &wt.branch);
-                        ci_cache.insert(ws_id.clone(), ci.clone());
-                        ci
-                    } else {
-                        ci_cache.get(&ws_id).cloned().unwrap_or(CIStatus {
-                            state: "none".to_string(),
-                            url: None,
-                        })
-                    };
-
-                    statuses.insert(
-                        ws_id,
-                        WorkspaceBranchStatus {
+                    let _ = app_handle.emit(
+                        "branch-git-status",
+                        GitStatusEvent {
+                            workspace_id: ws_id.clone(),
                             git: git_status,
-                            ci: ci_status,
                         },
                     );
+
+                    // Emit cached CI status on non-CI ticks
+                    if !do_ci {
+                        let ci = ci_cache.get(&ws_id).cloned().unwrap_or(CIStatus {
+                            state: "none".to_string(),
+                            url: None,
+                        });
+                        let _ = app_handle.emit(
+                            "branch-ci-status",
+                            CIStatusEvent {
+                                workspace_id: ws_id,
+                                ci,
+                            },
+                        );
+                    }
                 }
             }
 
-            let _ = app_handle.emit("branch-status", BranchStatusEvent { statuses });
+            // On CI ticks, fetch CI status per workspace (slow, network)
+            if do_ci {
+                for proj in &app_state.projects {
+                    for wt in &proj.worktrees {
+                        let ws_id = format!("{}-{}", proj.name, wt.branch);
+                        let ci = get_ci_status(&wt.path, &wt.branch);
+                        ci_cache.insert(ws_id.clone(), ci.clone());
+
+                        let _ = app_handle.emit(
+                            "branch-ci-status",
+                            CIStatusEvent {
+                                workspace_id: ws_id,
+                                ci,
+                            },
+                        );
+                    }
+                }
+            }
 
             tick_count += 1;
             // Sleep in 1s increments to allow stop_flag checking

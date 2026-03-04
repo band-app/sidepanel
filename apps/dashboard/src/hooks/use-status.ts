@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useDashboardStore, WorkspaceStatus, WorkspaceBranchStatus } from "@/stores/dashboard-store";
+import { useDashboardStore, WorkspaceStatus, GitStatus, CIStatus } from "@/stores/dashboard-store";
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -78,12 +78,19 @@ export function useActiveWorkspaceWatcher() {
   }, [setActiveWorkspace]);
 }
 
-interface BranchStatusEvent {
-  statuses: Record<string, WorkspaceBranchStatus>;
+interface GitStatusEvent {
+  workspace_id: string;
+  git: GitStatus;
+}
+
+interface CIStatusEvent {
+  workspace_id: string;
+  ci: CIStatus;
 }
 
 export function useBranchStatusWatcher() {
-  const updateBranchStatuses = useDashboardStore((s) => s.updateBranchStatuses);
+  const updateGitStatus = useDashboardStore((s) => s.updateGitStatus);
+  const updateCIStatus = useDashboardStore((s) => s.updateCIStatus);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -96,16 +103,21 @@ export function useBranchStatusWatcher() {
 
       invoke("branch_status_watch_start").catch(console.error);
 
-      const unlisten = await listen<BranchStatusEvent>("branch-status", (event) => {
-        updateBranchStatuses(event.payload.statuses);
+      const unlistenGit = await listen<GitStatusEvent>("branch-git-status", (event) => {
+        updateGitStatus(event.payload.workspace_id, event.payload.git);
+      });
+
+      const unlistenCI = await listen<CIStatusEvent>("branch-ci-status", (event) => {
+        updateCIStatus(event.payload.workspace_id, event.payload.ci);
       });
 
       cleanup = () => {
-        unlisten();
+        unlistenGit();
+        unlistenCI();
         invoke("branch_status_watch_stop").catch(console.error);
       };
     })();
 
     return () => cleanup?.();
-  }, [updateBranchStatuses]);
+  }, [updateGitStatus, updateCIStatus]);
 }

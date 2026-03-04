@@ -89,7 +89,8 @@ interface DashboardState {
   removeStatus: (workspaceId: string) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
   branchStatuses: Map<string, WorkspaceBranchStatus>;
-  updateBranchStatuses: (statuses: Record<string, WorkspaceBranchStatus>) => void;
+  updateGitStatus: (workspaceId: string, git: GitStatus) => void;
+  updateCIStatus: (workspaceId: string, ci: CIStatus) => void;
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
@@ -189,7 +190,27 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     set({ activeWorkspaceId: workspaceId });
   },
 
-  updateBranchStatuses: (statuses: Record<string, WorkspaceBranchStatus>) => {
-    set({ branchStatuses: new Map(Object.entries(statuses)) });
+  updateGitStatus: (workspaceId: string, git: GitStatus) => {
+    set((state) => {
+      const branchStatuses = new Map(state.branchStatuses);
+      const existing = branchStatuses.get(workspaceId);
+      branchStatuses.set(workspaceId, {
+        git,
+        ci: existing?.ci ?? { state: "none" },
+      });
+      return { branchStatuses };
+    });
+  },
+
+  updateCIStatus: (workspaceId: string, ci: CIStatus) => {
+    set((state) => {
+      const branchStatuses = new Map(state.branchStatuses);
+      const existing = branchStatuses.get(workspaceId);
+      branchStatuses.set(workspaceId, {
+        git: existing?.git ?? { dirty: false, conflict: false, ahead: 0, behind: 0, sync_state: "synced" },
+        ci,
+      });
+      return { branchStatuses };
+    });
   },
 }));

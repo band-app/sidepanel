@@ -16,16 +16,17 @@ import { useDashboardStore } from "@/stores/dashboard-store";
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultLabel?: string | null;
 }
 
-export function AddProjectDialog({ open, onOpenChange }: Props) {
+export function AddProjectDialog({ open, onOpenChange, defaultLabel }: Props) {
   const [path, setPath] = useState("");
   const addProject = useDashboardStore((s) => s.addProject);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!path.trim()) return;
-    await addProject(path.trim());
+    await addProject(path.trim(), defaultLabel ?? undefined);
     setPath("");
     onOpenChange(false);
   };

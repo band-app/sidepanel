@@ -186,7 +186,7 @@ export default function App() {
         </main>
       </ScrollArea>
 
-      <AddProjectDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
+      <AddProjectDialog open={showAddDialog} onOpenChange={setShowAddDialog} defaultLabel={labelFilter} />
 
       <TunnelDialog
         open={showTunnelDialog}

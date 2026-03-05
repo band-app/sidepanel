@@ -75,7 +75,7 @@ interface DashboardState {
   error: string | null;
 
   loadProjects: () => Promise<void>;
-  addProject: (path: string) => Promise<void>;
+  addProject: (path: string, label?: string) => Promise<void>;
   removeProject: (name: string) => Promise<void>;
   reorderProjects: (projectNames: string[]) => Promise<void>;
   createWorkspace: (project: string, branch: string, base?: string) => Promise<void>;
@@ -110,9 +110,12 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     }
   },
 
-  addProject: async (path: string) => {
+  addProject: async (path: string, label?: string) => {
     try {
-      await invoke("project_init", { path });
+      const project = await invoke<ProjectInfo>("project_init", { path });
+      if (label) {
+        await invoke("project_update_label", { name: project.name, label });
+      }
       await get().loadProjects();
     } catch (e) {
       set({ error: String(e) });

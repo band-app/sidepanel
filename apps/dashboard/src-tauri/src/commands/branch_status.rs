@@ -145,6 +145,21 @@ fn get_git_status(worktree_path: &str) -> GitStatus {
     }
 }
 
+fn run_state(run: &serde_json::Value) -> &'static str {
+    let status = run["status"].as_str().unwrap_or("");
+    let conclusion = run["conclusion"].as_str().unwrap_or("");
+    match status {
+        "completed" => match conclusion {
+            "success" => "success",
+            "cancelled" | "skipped" => "cancelled",
+            _ => "failure",
+        },
+        "in_progress" => "running",
+        "queued" | "waiting" | "pending" | "requested" => "pending",
+        _ => "none",
+    }
+}
+
 fn get_ci_status(worktree_path: &str, branch: &str) -> CIStatus {
     let none = CIStatus {
         state: "none".to_string(),
@@ -158,9 +173,9 @@ fn get_ci_status(worktree_path: &str, branch: &str) -> CIStatus {
             "--branch",
             branch,
             "--limit",
-            "1",
+            "20",
             "--json",
-            "status,conclusion,url,updatedAt",
+            "status,conclusion,url,updatedAt,workflowName",
         ])
         .current_dir(worktree_path)
         .output()
@@ -177,23 +192,59 @@ fn get_ci_status(worktree_path: &str, branch: &str) -> CIStatus {
         return none;
     };
 
-    let Some(run) = runs.first() else {
+    if runs.is_empty() {
         return none;
-    };
+    }
 
-    let status = run["status"].as_str().unwrap_or("");
-    let conclusion = run["conclusion"].as_str().unwrap_or("");
-    let url = run["url"].as_str().map(std::string::ToString::to_string);
+    // Deduplicate: keep only the latest run per workflow (runs are sorted newest-first)
+    let mut latest_per_workflow: Vec<&serde_json::Value> = Vec::new();
+    let mut seen_workflows = std::collections::HashSet::new();
+    for run in &runs {
+        let wf = run["workflowName"].as_str().unwrap_or("");
+        if seen_workflows.insert(wf.to_string()) {
+            latest_per_workflow.push(run);
+        }
+    }
 
-    let state = match status {
-        "completed" => match conclusion {
-            "success" => "success",
-            "cancelled" | "skipped" => "cancelled",
-            _ => "failure",
-        },
-        "in_progress" => "running",
-        "queued" | "waiting" | "pending" | "requested" => "pending",
-        _ => "none",
+    // Aggregate: pick the worst state across all workflows
+    // Priority: failure > running > pending > cancelled > success
+    let mut has_failure = false;
+    let mut has_running = false;
+    let mut has_pending = false;
+    let mut has_success = false;
+    let mut failure_url: Option<String> = None;
+    let mut first_url: Option<String> = None;
+
+    for run in &latest_per_workflow {
+        let state = run_state(run);
+        let url = run["url"].as_str().map(std::string::ToString::to_string);
+        if first_url.is_none() {
+            first_url.clone_from(&url);
+        }
+        match state {
+            "failure" => {
+                has_failure = true;
+                if failure_url.is_none() {
+                    failure_url = url;
+                }
+            }
+            "running" => has_running = true,
+            "pending" => has_pending = true,
+            "success" => has_success = true,
+            _ => {}
+        }
+    }
+
+    let (state, url) = if has_failure {
+        ("failure", failure_url.or(first_url))
+    } else if has_running {
+        ("running", first_url)
+    } else if has_pending {
+        ("pending", first_url)
+    } else if has_success {
+        ("success", first_url)
+    } else {
+        ("cancelled", first_url)
     };
 
     CIStatus {

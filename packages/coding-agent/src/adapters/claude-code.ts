@@ -120,19 +120,25 @@ function mapSessionInfo(info: SDKSessionInfo): SessionListItem {
 function mapSessionMessage(msg: SessionMessage): SessionMessageItem {
   const content: SessionMessageItem["content"] = [];
   const raw = msg.message as {
-    content?: Array<{
-      type: string;
-      text?: string;
-      id?: string;
-      name?: string;
-      input?: unknown;
-      tool_use_id?: string;
-      content?: unknown;
-      is_error?: boolean;
-    }>;
+    content?:
+      | string
+      | Array<{
+          type: string;
+          text?: string;
+          id?: string;
+          name?: string;
+          input?: unknown;
+          tool_use_id?: string;
+          content?: unknown;
+          is_error?: boolean;
+        }>;
   } | null;
 
-  if (raw?.content && Array.isArray(raw.content)) {
+  if (typeof raw?.content === "string") {
+    if (raw.content.trim()) {
+      content.push({ type: "text", text: raw.content });
+    }
+  } else if (raw?.content && Array.isArray(raw.content)) {
     for (const block of raw.content) {
       if (block.type === "text" && block.text) {
         content.push({ type: "text", text: block.text });

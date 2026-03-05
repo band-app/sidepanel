@@ -16,6 +16,10 @@ pub struct WorktreeInfo {
     pub branch: String,
     pub path: String,
     pub head: Option<String>,
+    #[serde(rename = "hasSetup")]
+    pub has_setup: bool,
+    #[serde(rename = "hasTeardown")]
+    pub has_teardown: bool,
 }
 
 impl From<&ProjectState> for ProjectInfo {
@@ -27,10 +31,15 @@ impl From<&ProjectState> for ProjectInfo {
             worktrees: ps
                 .worktrees
                 .iter()
-                .map(|wt| WorktreeInfo {
-                    branch: wt.branch.clone(),
-                    path: wt.path.clone(),
-                    head: wt.head.clone(),
+                .map(|wt| {
+                    let config = state::load_project_config(&wt.path);
+                    WorktreeInfo {
+                        branch: wt.branch.clone(),
+                        path: wt.path.clone(),
+                        head: wt.head.clone(),
+                        has_setup: config.setup.is_some(),
+                        has_teardown: config.teardown.is_some(),
+                    }
                 })
                 .collect(),
         }

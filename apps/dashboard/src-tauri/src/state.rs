@@ -136,6 +136,26 @@ pub fn load_project_config(project_path: &str) -> ProjectConfig {
         .unwrap_or_default()
 }
 
+pub fn run_script_in_terminal(command: &str, cwd: &str) -> Result<(), String> {
+    let escaped_cwd = cwd.replace('\'', "'\\''");
+    let escaped_cmd = command.replace('\'', "'\\''");
+
+    let apple_script = format!(
+        "tell application \"Terminal\"\n\
+             activate\n\
+             do script \"cd '{}' && {}\"\n\
+         end tell",
+        escaped_cwd, escaped_cmd
+    );
+
+    Command::new("osascript")
+        .args(["-e", &apple_script])
+        .output()
+        .map_err(|e| format!("Failed to open terminal: {e}"))?;
+
+    Ok(())
+}
+
 pub fn run_script(command: &str, cwd: &str) -> Result<(), String> {
     let output = Command::new("sh")
         .args(["-c", command])

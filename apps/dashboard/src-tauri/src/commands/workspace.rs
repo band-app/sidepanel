@@ -106,6 +106,18 @@ pub fn workspace_remove(project: String, branch: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn workspace_run_script(path: String, script_type: String) -> Result<(), String> {
+    let config = state::load_project_config(&path);
+    let script = match script_type.as_str() {
+        "setup" => config.setup,
+        "teardown" => config.teardown,
+        other => return Err(format!("Unknown script type: {other}")),
+    };
+    let script = script.ok_or_else(|| format!("No {script_type} script configured"))?;
+    state::run_script_in_terminal(&script, &path)
+}
+
+#[tauri::command]
 pub fn workspace_open(workspace_id: String) -> Result<(), String> {
     // workspace_id is "project-branch"
     let app_state = state::load_state()?;

@@ -1,4 +1,4 @@
-import { Clipboard, Ellipsis, FolderOpen, GitBranch, Trash2 } from "lucide-react";
+import { Clipboard, Ellipsis, FolderOpen, GitBranch, Play, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { AgentStatusBadge } from "@/components/AgentStatusBadge";
 import { CIStatusIndicator } from "@/components/CIStatusIndicator";
@@ -43,6 +43,7 @@ export function WorkspaceCard({
   }, [isFocused]);
   const openWorkspace = useDashboardStore((s) => s.openWorkspace);
   const removeWorkspace = useDashboardStore((s) => s.removeWorkspace);
+  const runScript = useDashboardStore((s) => s.runScript);
   const activeWorkspaceId = useDashboardStore((s) => s.activeWorkspaceId);
 
   const workspaceId = `${projectName}-${worktree.branch}`;
@@ -94,6 +95,18 @@ export function WorkspaceCard({
               <FolderOpen />
               Open in Finder
             </DropdownMenuItem>
+            {worktree.hasSetup && (
+              <DropdownMenuItem onClick={() => runScript(worktree.path, "setup")}>
+                <Play />
+                Run setup
+              </DropdownMenuItem>
+            )}
+            {worktree.hasTeardown && (
+              <DropdownMenuItem onClick={() => runScript(worktree.path, "teardown")}>
+                <Square />
+                Run teardown
+              </DropdownMenuItem>
+            )}
             {worktree.branch !== defaultBranch && (
               <DropdownMenuItem
                 variant="destructive"

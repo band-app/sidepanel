@@ -32,6 +32,7 @@ pub fn run() {
             commands::workspace::workspace_list,
             commands::workspace::workspace_remove,
             commands::workspace::workspace_open,
+            commands::workspace::workspace_run_script,
             commands::status::status_watch_start,
             commands::status::status_watch_stop,
             commands::ide::workspace_focus,

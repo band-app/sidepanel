@@ -40,6 +40,8 @@ export interface WorktreeInfo {
   branch: string;
   path: string;
   head?: string;
+  hasSetup?: boolean;
+  hasTeardown?: boolean;
 }
 
 export type GitSyncState = "synced" | "ahead" | "behind" | "diverged";
@@ -82,6 +84,7 @@ interface DashboardState {
   removeStatus: (workspaceId: string) => void;
   setActiveWorkspace: (workspaceId: string | null) => void;
   branchStatuses: Map<string, WorkspaceBranchStatus>;
+  runScript: (path: string, scriptType: string) => Promise<void>;
   updateGitStatus: (workspaceId: string, git: GitStatus) => void;
   updateCIStatus: (workspaceId: string, ci: CIStatus) => void;
 }
@@ -186,6 +189,14 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
     );
     if (get().activeWorkspaceId === workspaceId) return;
     set({ activeWorkspaceId: workspaceId });
+  },
+
+  runScript: async (path: string, scriptType: string) => {
+    try {
+      await invoke("workspace_run_script", { path, scriptType });
+    } catch (e) {
+      set({ error: String(e) });
+    }
   },
 
   updateGitStatus: (workspaceId: string, git: GitStatus) => {

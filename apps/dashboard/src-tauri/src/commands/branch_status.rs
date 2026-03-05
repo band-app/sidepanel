@@ -160,11 +160,40 @@ fn run_state(run: &serde_json::Value) -> &'static str {
     }
 }
 
+fn check_merged_pr(worktree_path: &str, branch: &str) -> Option<CIStatus> {
+    let pr_output = gh_cmd()
+        .args(["pr", "view", branch, "--json", "state,url"])
+        .current_dir(worktree_path)
+        .output()
+        .ok()?;
+
+    if !pr_output.status.success() {
+        return None;
+    }
+
+    let pr_text = String::from_utf8_lossy(&pr_output.stdout);
+    let pr: serde_json::Value = serde_json::from_str(&pr_text).ok()?;
+
+    if pr["state"].as_str() == Some("MERGED") {
+        Some(CIStatus {
+            state: "merged".to_string(),
+            url: pr["url"].as_str().map(std::string::ToString::to_string),
+        })
+    } else {
+        None
+    }
+}
+
 fn get_ci_status(worktree_path: &str, branch: &str) -> CIStatus {
     let none = CIStatus {
         state: "none".to_string(),
         url: None,
     };
+
+    // Check if the branch has a merged PR first — overrides any CI state
+    if let Some(merged) = check_merged_pr(worktree_path, branch) {
+        return merged;
+    }
 
     let Ok(output) = gh_cmd()
         .args([
@@ -247,31 +276,10 @@ fn get_ci_status(worktree_path: &str, branch: &str) -> CIStatus {
         ("cancelled", first_url)
     };
 
-    let ci = CIStatus {
+    CIStatus {
         state: state.to_string(),
         url,
-    };
-
-    // Check if the branch has a merged PR — if so, override CI state
-    if let Ok(pr_output) = gh_cmd()
-        .args(["pr", "view", branch, "--json", "state,url"])
-        .current_dir(worktree_path)
-        .output()
-    {
-        if pr_output.status.success() {
-            let pr_text = String::from_utf8_lossy(&pr_output.stdout);
-            if let Ok(pr) = serde_json::from_str::<serde_json::Value>(&pr_text) {
-                if pr["state"].as_str() == Some("MERGED") {
-                    return CIStatus {
-                        state: "merged".to_string(),
-                        url: pr["url"].as_str().map(std::string::ToString::to_string),
-                    };
-                }
-            }
-        }
     }
-
-    ci
 }
 
 #[tauri::command]

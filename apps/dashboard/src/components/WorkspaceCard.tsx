@@ -59,7 +59,7 @@ export function WorkspaceCard({
         if (e.key === "Enter" || e.key === " ") openWorkspace(workspaceId);
       }}
     >
-      <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+      <div className="flex flex-1 items-center gap-3 min-w-0 overflow-hidden">
         <GitBranch
           className={`size-3 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
         />

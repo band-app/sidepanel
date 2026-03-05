@@ -167,7 +167,7 @@ export default function App() {
       <Separator />
 
       <ScrollArea
-        className="flex-1"
+        className="flex-1 overflow-hidden"
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (target.closest("button, a, input, select, textarea")) return;

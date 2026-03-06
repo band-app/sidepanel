@@ -24,7 +24,7 @@ export function CIStatusIndicator({ ci }: Props) {
       <Tooltip>
         <TooltipTrigger asChild>
           <GitMerge
-            className={`size-3 shrink-0 text-violet-400 ${cursorClass}`}
+            className={`size-3.5 shrink-0 text-violet-400 ${cursorClass}`}
             onClick={(e) => handleOpenUrl(ci.url, e)}
           />
         </TooltipTrigger>
@@ -38,7 +38,7 @@ export function CIStatusIndicator({ ci }: Props) {
       <Tooltip>
         <TooltipTrigger asChild>
           <CircleCheck
-            className={`size-3 shrink-0 text-green-400 ${cursorClass}`}
+            className={`size-3.5 shrink-0 text-green-400 ${cursorClass}`}
             onClick={(e) => handleOpenUrl(ci.url, e)}
           />
         </TooltipTrigger>
@@ -52,7 +52,7 @@ export function CIStatusIndicator({ ci }: Props) {
       <Tooltip>
         <TooltipTrigger asChild>
           <CircleAlert
-            className={`size-3 shrink-0 text-red-400 ${cursorClass}`}
+            className={`size-3.5 shrink-0 text-red-400 ${cursorClass}`}
             onClick={(e) => handleOpenUrl(ci.url, e)}
           />
         </TooltipTrigger>
@@ -66,7 +66,7 @@ export function CIStatusIndicator({ ci }: Props) {
       <Tooltip>
         <TooltipTrigger asChild>
           <Loader
-            className={`size-3 shrink-0 text-yellow-400 animate-spin ${cursorClass}`}
+            className={`size-3.5 shrink-0 text-yellow-400 animate-spin ${cursorClass}`}
             onClick={(e) => handleOpenUrl(ci.url, e)}
           />
         </TooltipTrigger>

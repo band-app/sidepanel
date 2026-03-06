@@ -39,7 +39,7 @@ export function GitStatusIndicator({ git }: Props) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="inline-flex items-center gap-0.5 font-mono text-[10px] leading-none shrink-0">
+        <span className="inline-flex items-center gap-0.5 font-mono text-[11px] leading-none shrink-0">
           {parts.map((p) => (
             <span key={p.text} className={p.color}>
               {p.text}

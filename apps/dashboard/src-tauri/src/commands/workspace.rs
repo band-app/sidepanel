@@ -39,10 +39,13 @@ pub fn workspace_create(
 
     state::save_state(&app_state)?;
 
-    // Run setup script if configured
+    // Run setup script if configured — failure is non-fatal since the workspace
+    // was already created successfully.
     let config = state::load_project_config(&target_path_str);
     if let Some(setup) = &config.setup {
-        state::run_script(setup, &target_path_str)?;
+        if let Err(e) = state::run_script(setup, &target_path_str) {
+            eprintln!("Setup script failed for {project}/{branch}: {e}");
+        }
     }
 
     Ok(())

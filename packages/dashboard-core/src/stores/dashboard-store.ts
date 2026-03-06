@@ -89,10 +89,10 @@ export function createDashboardStore(adapter: DashboardAdapter): DashboardStore 
     createWorkspace: async (project: string, branch: string, base?: string) => {
       try {
         await adapter.createWorkspace(project, branch, base);
-        await get().loadProjects();
       } catch (e) {
         set({ error: String(e) });
       }
+      await get().loadProjects();
     },
 
     removeWorkspace: async (project: string, branch: string) => {

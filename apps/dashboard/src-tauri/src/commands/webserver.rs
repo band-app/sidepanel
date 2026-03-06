@@ -49,7 +49,7 @@ pub(crate) fn shell_path() -> &'static str {
     PATH.get_or_init(|| {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
         if let Ok(output) = Command::new(&shell)
-            .args(["-l", "-c", "echo $PATH"])
+            .args(["-li", "-c", "echo $PATH"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .output()

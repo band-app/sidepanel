@@ -1,6 +1,7 @@
 import { Check, Globe, Plus, Settings, Tag, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AddProjectDialog } from "@/components/AddProjectDialog";
+import { PrereqDialog } from "@/components/PrereqDialog";
 import { ProjectList } from "@/components/ProjectList";
 import { SettingsPage } from "@/components/SettingsPage";
 import { TunnelDialog } from "@/components/TunnelDialog";
@@ -38,6 +39,9 @@ export default function App() {
     webServerRunning,
     tunnelUrl,
     setTunnelUrl,
+    showPrereq,
+    setShowPrereq,
+    onPrereqReady,
     showDialog: showTunnelDialog,
     setShowDialog: setShowTunnelDialog,
     openDialog,
@@ -187,6 +191,12 @@ export default function App() {
       </ScrollArea>
 
       <AddProjectDialog open={showAddDialog} onOpenChange={setShowAddDialog} defaultLabel={labelFilter} />
+
+      <PrereqDialog
+        open={showPrereq}
+        onOpenChange={setShowPrereq}
+        onReady={onPrereqReady}
+      />
 
       <TunnelDialog
         open={showTunnelDialog}

@@ -202,8 +202,8 @@ export function SettingsPage({ onClose }: Props) {
     return (
       <div>
         <div className="flex items-center gap-1 mb-3 px-1">
-          <Button variant="ghost" size="icon-xs" onClick={() => setSection("menu")}>
-            <ChevronLeft />
+          <Button variant="ghost" size="icon-sm" onClick={() => setSection("menu")}>
+            <ChevronLeft className="size-5" />
           </Button>
           <h2 className="text-base font-semibold flex-1">
             {section === "general" && "General"}
@@ -217,11 +217,11 @@ export function SettingsPage({ onClose }: Props) {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 onClick={handleSave}
                 disabled={section === "defaults" && !!defaultsError}
               >
-                <Save />
+                <Save className="size-5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>Save</TooltipContent>
@@ -241,7 +241,7 @@ export function SettingsPage({ onClose }: Props) {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWorktreesDir(e.target.value)}
                 />
                 {capabilities.pickFolder && (
-                  <Button type="button" variant="outline" size="icon-xs" onClick={handleBrowse}>
+                  <Button type="button" variant="ghost" size="icon" onClick={handleBrowse}>
                     <FolderOpen />
                   </Button>
                 )}
@@ -510,11 +510,12 @@ export function SettingsPage({ onClose }: Props) {
   return (
     <div>
       <div className="flex items-center gap-1 mb-2 px-1">
-        <Button variant="ghost" size="icon-xs" onClick={onClose}>
-          <ChevronLeft />
+        <Button variant="ghost" size="icon-sm" onClick={onClose}>
+          <ChevronLeft className="size-5" />
         </Button>
         <h2 className="text-base font-semibold">Settings</h2>
       </div>
+      <Separator />
       <div className="flex flex-col gap-px">
         <SettingsRow
           label="General"

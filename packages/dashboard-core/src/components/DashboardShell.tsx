@@ -138,12 +138,12 @@ export function DashboardShell({ toolbarExtra }: DashboardShellProps) {
             </div>
           )}
 
-          <div className="flex items-center justify-between px-4">
+          <div className="flex items-center justify-between px-4 py-2">
             <div className="flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon-xs" variant="ghost" onClick={() => setView("settings")}>
-                    <Settings className="size-4" />
+                  <Button size="icon-sm" variant="ghost" onClick={() => setView("settings")}>
+                    <Settings className="size-5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Settings</TooltipContent>
@@ -169,7 +169,7 @@ export function DashboardShell({ toolbarExtra }: DashboardShellProps) {
                         </>
                       ) : (
                         <>
-                          <Tag className="size-4" />
+                          <Tag className="size-5" />
                           All
                         </>
                       )}
@@ -196,8 +196,8 @@ export function DashboardShell({ toolbarExtra }: DashboardShellProps) {
             </div>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button size="icon-xs" variant="ghost" onClick={() => setShowAddDialog(true)}>
-                  <Plus className="size-4" />
+                <Button size="icon-sm" variant="ghost" onClick={() => setShowAddDialog(true)}>
+                  <Plus className="size-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Add project</TooltipContent>

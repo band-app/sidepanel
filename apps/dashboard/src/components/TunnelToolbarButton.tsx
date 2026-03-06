@@ -23,12 +23,12 @@ export function TunnelToolbarButton() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            size="icon-xs"
+            size="icon-sm"
             variant="ghost"
             className={webServerRunning ? "text-green-500" : ""}
             onClick={openDialog}
           >
-            <Globe className="size-4" />
+            <Globe className="size-5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent>

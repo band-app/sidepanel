@@ -89,10 +89,10 @@ export function WorkspaceCard({
         <Container {...(containerProps as React.HTMLAttributes<HTMLElement>)}>
           <div className="flex flex-1 items-center gap-3 min-w-0 overflow-hidden">
             <GitBranch
-              className={`size-3 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+              className={`size-3.5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
             />
             <span
-              className={`text-xs truncate ${isActive ? "font-semibold text-foreground" : "font-medium"}`}
+              className={`text-sm truncate ${isActive ? "font-semibold text-foreground" : "font-medium"}`}
               style={isActive ? undefined : { color: "oklch(0.7 0 0)" }}
             >
               {worktree.branch}

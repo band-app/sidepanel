@@ -91,7 +91,7 @@ function SortableProject({
               {...attributes}
               {...listeners}
             >
-              <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+              <FolderOpen className="size-4 shrink-0 text-muted-foreground" />
               <h2 className="text-sm font-semibold text-foreground truncate">{project.name}</h2>
             </div>
             <Tooltip>

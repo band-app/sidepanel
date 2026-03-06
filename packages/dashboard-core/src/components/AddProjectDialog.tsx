@@ -62,7 +62,7 @@ export function AddProjectDialog({ open, onOpenChange, defaultLabel }: Props) {
                 autoFocus
               />
               {capabilities.pickFolder && (
-                <Button type="button" variant="outline" size="icon-xs" onClick={handleBrowse}>
+                <Button type="button" variant="ghost" size="icon" onClick={handleBrowse}>
                   <FolderOpen />
                 </Button>
               )}

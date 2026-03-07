@@ -1,1 +1,2 @@
-pnpm lint
+pnpm exec biome check .
+cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings

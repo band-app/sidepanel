@@ -77,6 +77,10 @@ button,
   display: block;
 }
 
+pre {
+  overflow-x: auto;
+}
+
 html,
 body {
   height: 100%;

@@ -58,7 +58,7 @@ export function DashboardShell({ toolbarExtra }: DashboardShellProps) {
   }, [loadProjects, loadSettings]);
 
   return (
-    <div className="h-dvh w-screen overflow-hidden flex flex-col bg-background text-foreground p-0 pt-[env(safe-area-inset-top)]">
+    <div className="h-dvh w-full overflow-hidden flex flex-col bg-background text-foreground p-0 pt-[env(safe-area-inset-top)]">
       <Separator />
 
       {view === "settings" ? (

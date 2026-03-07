@@ -22,6 +22,7 @@ extern "C" {
         value: *mut *const c_void,
     ) -> i32;
     fn AXUIElementGetPid(element: *const c_void, pid: *mut i32) -> i32;
+    fn AXIsProcessTrustedWithOptions(options: *const c_void) -> bool;
 }
 
 #[link(name = "CoreFoundation", kind = "framework")]
@@ -39,6 +40,17 @@ extern "C" {
         encoding: u32,
     ) -> u8;
     fn CFStringGetLength(the_string: *const c_void) -> i64;
+    fn CFDictionaryCreate(
+        allocator: *const c_void,
+        keys: *const *const c_void,
+        values: *const *const c_void,
+        count: i64,
+        key_callbacks: *const c_void,
+        value_callbacks: *const c_void,
+    ) -> *const c_void;
+    static kCFBooleanTrue: *const c_void;
+    static kCFTypeDictionaryKeyCallBacks: c_void;
+    static kCFTypeDictionaryValueCallBacks: c_void;
 }
 
 extern "C" {
@@ -87,7 +99,57 @@ unsafe fn cfstring_to_string(cf: *const c_void) -> Option<String> {
 
 // --- Accessibility API: get frontmost window PID + title ---
 
+/// Prompt for Accessibility permission on first launch, then check periodically.
+fn check_accessibility() -> bool {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    // 0 = unchecked, 1 = trusted, 2 = not trusted (prompted)
+    static STATE: AtomicU8 = AtomicU8::new(0);
+
+    let prev = STATE.load(Ordering::Relaxed);
+
+    let trusted = unsafe {
+        if prev == 0 {
+            // First check: show the macOS Accessibility prompt if not trusted
+            let key = cfstr("AXTrustedCheckOptionPrompt");
+            let keys = [key];
+            let values = [kCFBooleanTrue];
+            let opts = CFDictionaryCreate(
+                std::ptr::null(),
+                keys.as_ptr(),
+                values.as_ptr(),
+                1,
+                &kCFTypeDictionaryKeyCallBacks as *const c_void,
+                &kCFTypeDictionaryValueCallBacks as *const c_void,
+            );
+            let result = AXIsProcessTrustedWithOptions(opts);
+            CFRelease(key);
+            if !opts.is_null() {
+                CFRelease(opts);
+            }
+            result
+        } else {
+            // Subsequent checks: no prompt
+            AXIsProcessTrustedWithOptions(std::ptr::null())
+        }
+    };
+
+    let new = if trusted { 1 } else { 2 };
+    if prev != new {
+        STATE.store(new, Ordering::Relaxed);
+        if trusted {
+            eprintln!("[band] Accessibility permission: granted");
+        } else {
+            eprintln!("[band] Accessibility permission: NOT granted — focus tracking and window management disabled");
+        }
+    }
+    trusted
+}
+
 fn get_frontmost_window() -> Option<(i32, String)> {
+    if !check_accessibility() {
+        return None;
+    }
+
     unsafe {
         let system_wide = AXUIElementCreateSystemWide();
         if system_wide.is_null() {

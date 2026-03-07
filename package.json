@@ -16,9 +16,11 @@
     "lint:fix": "biome check --fix . && cargo clippy --manifest-path apps/cli/Cargo.toml --fix --allow-dirty && cargo clippy --manifest-path apps/dashboard/src-tauri/Cargo.toml --fix --allow-dirty",
     "format": "biome format . && cargo fmt --manifest-path apps/cli/Cargo.toml -- --check && cargo fmt --manifest-path apps/dashboard/src-tauri/Cargo.toml -- --check",
     "format:fix": "biome format --fix . && cargo fmt --manifest-path apps/cli/Cargo.toml && cargo fmt --manifest-path apps/dashboard/src-tauri/Cargo.toml",
-    "check": "biome check . && cargo fmt --manifest-path apps/cli/Cargo.toml -- --check && cargo fmt --manifest-path apps/dashboard/src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings && cargo clippy --manifest-path apps/dashboard/src-tauri/Cargo.toml -- -D warnings"
+    "check": "biome check . && cargo fmt --manifest-path apps/cli/Cargo.toml -- --check && cargo fmt --manifest-path apps/dashboard/src-tauri/Cargo.toml -- --check && cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings && cargo clippy --manifest-path apps/dashboard/src-tauri/Cargo.toml -- -D warnings",
+    "prepare": "husky"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.5"
+    "@biomejs/biome": "^2.4.5",
+    "husky": "^9.1.7"
   }
 }

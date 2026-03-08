@@ -62,7 +62,11 @@ export class ClaudeCodeAdapter implements CodingAgent {
 
     log.info("query() called, waiting for messages...");
 
-    const state: ProcessedState = { assistantContentIndex: 0, toolNames: new Map() };
+    const state: ProcessedState = {
+      assistantContentIndex: 0,
+      toolNames: new Map(),
+      hasEmittedTextSinceLastUser: false,
+    };
 
     try {
       for await (const message of conversation) {
@@ -172,6 +176,7 @@ function mapSessionMessage(msg: SessionMessage): SessionMessageItem {
 interface ProcessedState {
   assistantContentIndex: number;
   toolNames: Map<string, string>;
+  hasEmittedTextSinceLastUser: boolean;
 }
 
 function* mapClaudeCodeEvent(
@@ -221,6 +226,7 @@ function* mapClaudeCodeEvent(
               break;
             }
             yield { type: "text-delta", text: block.text };
+            state.hasEmittedTextSinceLastUser = true;
             processedUpTo = i + 1;
           } else if (block.type === "tool_use") {
             const toolCallId = block.id ?? crypto.randomUUID();
@@ -245,6 +251,7 @@ function* mapClaudeCodeEvent(
 
     case "user": {
       state.assistantContentIndex = 0;
+      state.hasEmittedTextSinceLastUser = false;
       const msg = message.message as
         | {
             content?: Array<{
@@ -282,6 +289,18 @@ function* mapClaudeCodeEvent(
       const durationMs = (message.duration_ms as number) ?? 0;
       const numTurns = (message.num_turns as number) ?? 0;
       const costUsd = (message.total_cost_usd as number) ?? 0;
+
+      // Fallback: if the final assistant text was never streamed via
+      // intermediate `assistant` events (e.g. the SDK jumped straight
+      // from an empty-text placeholder to the `result` event), emit
+      // the text carried on the result payload so it reaches the UI.
+      if (subtype === "success" && !state.hasEmittedTextSinceLastUser) {
+        const resultText = message.result as string | undefined;
+        if (resultText) {
+          log.info("emitting result text as fallback (text was not streamed)");
+          yield { type: "text-delta", text: resultText };
+        }
+      }
 
       if (subtype === "success") {
         yield {

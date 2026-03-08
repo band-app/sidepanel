@@ -50,6 +50,7 @@ export type {
   FileContentResult,
   FileEntry,
   FileListResult,
+  FileStatus,
   GitStatus,
   GitSyncState,
   HooksStatus,

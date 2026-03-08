@@ -126,11 +126,14 @@ export interface DeleteDialogInfo {
   hasUnpushedCommits: boolean;
 }
 
+export type FileStatus = "A" | "M" | "D" | "R" | "U";
+
 export interface WorkspaceDiff {
   diff: string;
   stats: { filesChanged: number; insertions: number; deletions: number };
   baseBranch: string;
   headBranch: string;
+  fileStatuses: Record<string, FileStatus>;
 }
 
 export interface FileEntry {

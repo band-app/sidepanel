@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAdapter } from "../context";
-import type { WorkspaceDiff } from "../types";
+import type { FileStatus, WorkspaceDiff } from "../types";
 
 interface DiffViewProps {
   workspaceId: string;
@@ -19,7 +19,7 @@ function parseDiffFiles(diff: string): ParsedFile[] {
     const lines = fileDiff.split("\n");
     // Extract filename from the first line: "a/path b/path"
     const firstLine = lines[0] || "";
-    const match = firstLine.match(/b\/(.+)$/);
+    const match = firstLine.match(/ b\/(.+)$/);
     const filename = match ? match[1] : firstLine;
 
     files.push({
@@ -29,6 +29,19 @@ function parseDiffFiles(diff: string): ParsedFile[] {
   }
 
   return files;
+}
+
+const statusColors: Record<FileStatus, string> = {
+  A: "text-green-400",
+  M: "text-blue-400",
+  D: "text-red-400",
+  R: "text-purple-400",
+  U: "text-yellow-400",
+};
+
+function FileStatusBadge({ status }: { status: FileStatus | undefined }) {
+  if (!status) return null;
+  return <span className={`shrink-0 text-[10px] font-bold ${statusColors[status]}`}>{status}</span>;
 }
 
 function DiffFileContent({ hunks }: { hunks: string }) {
@@ -135,6 +148,7 @@ export function DiffView({ workspaceId }: DiffViewProps) {
   }
 
   const files = parseDiffFiles(data.diff);
+  const fileStatuses = data.fileStatuses || {};
 
   const toggleFile = (filename: string) => {
     setOpenFiles((prev) => {
@@ -180,7 +194,9 @@ export function DiffView({ workspaceId }: DiffViewProps) {
                 >
                   ▶
                 </span>
-                <span className="min-w-0 flex-1 truncate font-mono">{file.filename}</span>
+                <span className="min-w-0 flex-1 truncate font-mono">
+                  {file.filename} <FileStatusBadge status={fileStatuses[file.filename]} />
+                </span>
               </button>
               {isOpen && (
                 <div className="border-t border-border/20 bg-muted/30 px-2 py-1">

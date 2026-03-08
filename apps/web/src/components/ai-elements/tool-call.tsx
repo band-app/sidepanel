@@ -4,7 +4,15 @@ import { ChevronDownIcon } from "lucide-react";
 import { MessageResponse } from "./message";
 import { ToolInput, ToolOutput } from "./tool";
 
-const MARKDOWN_OUTPUT_TOOLS = new Set(["ExitPlanMode"]);
+function extractMarkdown(item: ToolCallItem): string | null {
+  if (item.toolName === "ExitPlanMode") {
+    const input = item.input as Record<string, unknown> | null | undefined;
+    if (input && typeof input.plan === "string" && input.plan.trim()) {
+      return input.plan;
+    }
+  }
+  return null;
+}
 
 export interface ToolCallItem {
   toolCallId: string;
@@ -46,10 +54,7 @@ function StatusDot({ isError, isInProgress }: { isError: boolean; isInProgress: 
 export function ToolCall({ item }: { item: ToolCallItem }) {
   const title = formatToolTitle(item.toolName, item.input);
 
-  const hasMarkdownOutput =
-    MARKDOWN_OUTPUT_TOOLS.has(item.toolName) &&
-    typeof item.output === "string" &&
-    item.output.trim();
+  const markdown = extractMarkdown(item);
 
   return (
     <>
@@ -67,7 +72,7 @@ export function ToolCall({ item }: { item: ToolCallItem }) {
           <ToolOutput output={item.output} errorText={item.errorText} />
         </CollapsibleContent>
       </Collapsible>
-      {hasMarkdownOutput && <MessageResponse>{item.output as string}</MessageResponse>}
+      {markdown && <MessageResponse>{markdown}</MessageResponse>}
     </>
   );
 }

@@ -79,7 +79,7 @@ export function FileBrowser({
           root
         </button>
         {breadcrumbs.map((segment, i) => (
-          <span key={`${segment}-${i}`} className="flex items-center gap-1">
+          <span key={breadcrumbs.slice(0, i + 1).join("/")} className="flex items-center gap-1">
             <ChevronRight className="size-3 text-muted-foreground/50" />
             <button
               type="button"

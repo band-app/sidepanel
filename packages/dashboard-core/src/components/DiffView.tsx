@@ -33,20 +33,21 @@ function parseDiffFiles(diff: string): ParsedFile[] {
 
 function DiffFileContent({ hunks }: { hunks: string }) {
   const lines = hunks.split("\n");
-  const codeLines: { type: "add" | "del" | "context" | "hunk"; text: string }[] = [];
+  const codeLines: { type: "add" | "del" | "context" | "hunk"; text: string; key: string }[] = [];
 
   let inHunk = false;
+  let lineNum = 0;
   for (const line of lines) {
     if (line.startsWith("@@")) {
       inHunk = true;
-      codeLines.push({ type: "hunk", text: line });
+      codeLines.push({ type: "hunk", text: line, key: `L${lineNum++}` });
     } else if (inHunk) {
       if (line.startsWith("+")) {
-        codeLines.push({ type: "add", text: line.slice(1) });
+        codeLines.push({ type: "add", text: line.slice(1), key: `L${lineNum++}` });
       } else if (line.startsWith("-")) {
-        codeLines.push({ type: "del", text: line.slice(1) });
+        codeLines.push({ type: "del", text: line.slice(1), key: `L${lineNum++}` });
       } else if (line.startsWith(" ") || line === "") {
-        codeLines.push({ type: "context", text: line.slice(1) || "" });
+        codeLines.push({ type: "context", text: line.slice(1) || "", key: `L${lineNum++}` });
       }
     }
   }
@@ -54,9 +55,9 @@ function DiffFileContent({ hunks }: { hunks: string }) {
   return (
     <div className="overflow-x-auto">
       <pre className="text-xs leading-5">
-        {codeLines.map((line, i) => (
+        {codeLines.map((line) => (
           <div
-            key={`${line.type}-${i}`}
+            key={line.key}
             className={
               line.type === "add"
                 ? "bg-green-500/10 text-green-400"

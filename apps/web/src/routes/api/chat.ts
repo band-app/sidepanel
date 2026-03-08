@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 import { getOrCreateAgent } from "../../lib/agent-pool";
+import { bandHome } from "../../lib/state";
 import { writeAgentStream } from "../../lib/stream-writer";
 import { resolveWorkspace } from "../../lib/workspace";
 
@@ -21,8 +22,8 @@ interface MessagePart {
   filename?: string;
 }
 
-async function saveUploadedFiles(fileParts: FilePart[], workspaceDir: string): Promise<string[]> {
-  const uploadDir = join(workspaceDir, ".band", "uploads");
+async function saveUploadedFiles(fileParts: FilePart[]): Promise<string[]> {
+  const uploadDir = join(bandHome(), "uploads");
   await mkdir(uploadDir, { recursive: true });
 
   const savedPaths: string[] = [];
@@ -38,7 +39,7 @@ async function saveUploadedFiles(fileParts: FilePart[], workspaceDir: string): P
     const filePath = join(uploadDir, safeName);
 
     await writeFile(filePath, buffer);
-    savedPaths.push(`.band/uploads/${safeName}`);
+    savedPaths.push(filePath);
   }
 
   return savedPaths;
@@ -79,7 +80,7 @@ export const Route = createFileRoute("/api/chat")({
         let enhancedText = userText;
 
         if (fileParts.length > 0) {
-          const savedPaths = await saveUploadedFiles(fileParts, workspace.worktree.path);
+          const savedPaths = await saveUploadedFiles(fileParts);
           if (savedPaths.length > 0) {
             const fileList = savedPaths.map((p) => `- ${p}`).join("\n");
             enhancedText = `I'm sharing these files with you:\n${fileList}\n\n${userText}`;

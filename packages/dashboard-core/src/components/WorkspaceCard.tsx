@@ -1,12 +1,16 @@
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@band/ui";
 import { Clipboard, FolderOpen, GitBranch, Play, Square, Trash2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useCapabilities } from "../context";
 import { useDashboardStore } from "../stores/index";
-import type { WorkspaceBranchStatus, WorkspaceStatus, WorktreeInfo } from "../types";
+import type {
+  DeleteDialogInfo,
+  WorkspaceBranchStatus,
+  WorkspaceStatus,
+  WorktreeInfo,
+} from "../types";
 import { AgentStatusBadge } from "./AgentStatusBadge";
 import { CIStatusIndicator } from "./CIStatusIndicator";
-import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { GitStatusIndicator } from "./GitStatusIndicator";
 
 interface Props {
@@ -16,6 +20,7 @@ interface Props {
   status?: WorkspaceStatus;
   branchStatus?: WorkspaceBranchStatus;
   isFocused?: boolean;
+  onShowDeleteDialog: (info: DeleteDialogInfo) => void;
 }
 
 export function WorkspaceCard({
@@ -25,6 +30,7 @@ export function WorkspaceCard({
   status,
   branchStatus,
   isFocused,
+  onShowDeleteDialog,
 }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
   const capabilities = useCapabilities();
@@ -39,8 +45,6 @@ export function WorkspaceCard({
   const removeWorkspace = useDashboardStore((s) => s.removeWorkspace);
   const runScript = useDashboardStore((s) => s.runScript);
   const activeWorkspaceId = useDashboardStore((s) => s.activeWorkspaceId);
-
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const workspaceId = `${projectName}-${worktree.branch}`;
   const isActive = activeWorkspaceId === workspaceId;
@@ -74,13 +78,14 @@ export function WorkspaceCard({
     if (!hasUnmergedPR && !isDirty && !hasUnpushedCommits) {
       removeWorkspace(projectName, worktree.branch);
     } else {
-      setShowDeleteDialog(true);
+      onShowDeleteDialog({
+        projectName,
+        branch: worktree.branch,
+        isUnmerged: hasUnmergedPR,
+        isDirty,
+        hasUnpushedCommits,
+      });
     }
-  };
-
-  const confirmDelete = () => {
-    setShowDeleteDialog(false);
-    removeWorkspace(projectName, worktree.branch);
   };
 
   return (
@@ -137,15 +142,6 @@ export function WorkspaceCard({
           </ContextMenuItem>
         )}
       </ContextMenuContent>
-      <DeleteWorkspaceDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        onConfirm={confirmDelete}
-        branchName={worktree.branch}
-        isUnmerged={hasUnmergedPR}
-        isDirty={isDirty}
-        hasUnpushedCommits={hasUnpushedCommits}
-      />
     </ContextMenu>
   );
 }

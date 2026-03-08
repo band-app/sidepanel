@@ -35,11 +35,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCapabilities } from "../context";
 import { useDashboardStore, useSettingsStore } from "../stores/index";
 import type {
+  DeleteDialogInfo,
   LabelDefinition,
   ProjectInfo,
   WorkspaceBranchStatus,
   WorkspaceStatus,
 } from "../types";
+import { DeleteWorkspaceDialog } from "./DeleteWorkspaceDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceForm";
 import { WorkspaceCard } from "./WorkspaceCard";
 
@@ -50,8 +52,8 @@ interface SortableProjectProps {
   removeProject: (name: string) => void;
   updateProjectLabel: (name: string, label: string | null) => void;
   labels: LabelDefinition[];
-  workspaceDialog: string | null;
   setWorkspaceDialog: (name: string | null) => void;
+  onShowDeleteDialog: (info: DeleteDialogInfo) => void;
   focusedIndex: number;
   workspaceIndexStart: number;
 }
@@ -63,8 +65,8 @@ function SortableProject({
   removeProject,
   updateProjectLabel,
   labels,
-  workspaceDialog,
   setWorkspaceDialog,
+  onShowDeleteDialog,
   focusedIndex,
   workspaceIndexStart,
 }: SortableProjectProps) {
@@ -157,12 +159,6 @@ function SortableProject({
         </ContextMenuContent>
       </ContextMenu>
 
-      <NewWorkspaceDialog
-        projectName={project.name}
-        open={workspaceDialog === project.name}
-        onOpenChange={(open) => setWorkspaceDialog(open ? project.name : null)}
-      />
-
       <div className="flex flex-col gap-0.5 overflow-hidden">
         {project.worktrees.length === 0 ? (
           <p className="text-sm text-muted-foreground px-4 py-2">No workspaces yet</p>
@@ -179,6 +175,7 @@ function SortableProject({
                 status={statuses.get(wsId)}
                 branchStatus={branchStatuses.get(wsId)}
                 isFocused={currentIndex === focusedIndex}
+                onShowDeleteDialog={onShowDeleteDialog}
               />
             );
           })
@@ -224,9 +221,11 @@ export function ProjectList({ labelFilter }: ProjectListProps) {
   const removeProject = useDashboardStore((s) => s.removeProject);
   const reorderProjects = useDashboardStore((s) => s.reorderProjects);
   const openWorkspace = useDashboardStore((s) => s.openWorkspace);
+  const removeWorkspace = useDashboardStore((s) => s.removeWorkspace);
   const updateProjectLabel = useDashboardStore((s) => s.updateProjectLabel);
   const labels = useSettingsStore((s) => s.settings.labels) ?? [];
   const [workspaceDialog, setWorkspaceDialog] = useState<string | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogInfo | null>(null);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -365,58 +364,83 @@ export function ProjectList({ labelFilter }: ProjectListProps) {
   }
 
   return (
-    <div
-      ref={containerRef}
-      tabIndex={-1}
-      onKeyDown={handleKeyDown}
-      className="flex flex-col gap-1 outline-none min-w-0"
-    >
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
+    <>
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className="flex flex-col gap-1 outline-none min-w-0"
       >
-        <SortableContext items={allProjectNames} strategy={verticalListSortingStrategy}>
-          {visibleGroups.map((group, groupIndex) => (
-            <div key={group.labelId ?? "__unlabeled"}>
-              {groupIndex > 0 && !labels.length && <hr className="border-border my-1 mx-2" />}
-              {labels.length > 0 &&
-                !labelFilter &&
-                (group.label ? (
-                  <DroppableLabelHeader labelId={group.labelId!} label={group.label} />
-                ) : (
-                  <DroppableUnlabeledHeader />
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={allProjectNames} strategy={verticalListSortingStrategy}>
+            {visibleGroups.map((group, groupIndex) => (
+              <div key={group.labelId ?? "__unlabeled"}>
+                {groupIndex > 0 && !labels.length && <hr className="border-border my-1 mx-2" />}
+                {labels.length > 0 &&
+                  !labelFilter &&
+                  (group.label ? (
+                    <DroppableLabelHeader labelId={group.labelId!} label={group.label} />
+                  ) : (
+                    <DroppableUnlabeledHeader />
+                  ))}
+                {group.projects.map((project, index) => (
+                  <div key={project.name}>
+                    {index > 0 && <hr className="border-border mb-1 mx-2" />}
+                    <SortableProject
+                      project={project}
+                      statuses={statuses}
+                      branchStatuses={branchStatuses}
+                      removeProject={removeProject}
+                      updateProjectLabel={updateProjectLabel}
+                      labels={labels}
+                      setWorkspaceDialog={setWorkspaceDialog}
+                      onShowDeleteDialog={setDeleteDialog}
+                      focusedIndex={focusedIndex}
+                      workspaceIndexStart={workspaceIndexMap.get(project.name) ?? 0}
+                    />
+                  </div>
                 ))}
-              {group.projects.map((project, index) => (
-                <div key={project.name}>
-                  {index > 0 && <hr className="border-border mb-1 mx-2" />}
-                  <SortableProject
-                    project={project}
-                    statuses={statuses}
-                    branchStatuses={branchStatuses}
-                    removeProject={removeProject}
-                    updateProjectLabel={updateProjectLabel}
-                    labels={labels}
-                    workspaceDialog={workspaceDialog}
-                    setWorkspaceDialog={setWorkspaceDialog}
-                    focusedIndex={focusedIndex}
-                    workspaceIndexStart={workspaceIndexMap.get(project.name) ?? 0}
-                  />
-                </div>
-              ))}
-            </div>
-          ))}
-        </SortableContext>
-        <DragOverlay>
-          {activeDragId ? (
-            <div className="flex items-center gap-2 px-1 py-1 bg-background rounded shadow-lg border">
-              <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
-              <span className="text-sm font-semibold text-foreground">{activeDragId}</span>
-            </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-    </div>
+              </div>
+            ))}
+          </SortableContext>
+          <DragOverlay>
+            {activeDragId ? (
+              <div className="flex items-center gap-2 px-1 py-1 bg-background rounded shadow-lg border">
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="text-sm font-semibold text-foreground">{activeDragId}</span>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
+
+      <NewWorkspaceDialog
+        projectName={workspaceDialog ?? ""}
+        open={workspaceDialog !== null}
+        onOpenChange={(open) => setWorkspaceDialog(open ? workspaceDialog : null)}
+      />
+
+      <DeleteWorkspaceDialog
+        open={deleteDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteDialog(null);
+        }}
+        onConfirm={() => {
+          if (deleteDialog) {
+            removeWorkspace(deleteDialog.projectName, deleteDialog.branch);
+            setDeleteDialog(null);
+          }
+        }}
+        branchName={deleteDialog?.branch ?? ""}
+        isUnmerged={deleteDialog?.isUnmerged ?? false}
+        isDirty={deleteDialog?.isDirty ?? false}
+        hasUnpushedCommits={deleteDialog?.hasUnpushedCommits ?? false}
+      />
+    </>
   );
 }

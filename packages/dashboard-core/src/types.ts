@@ -117,3 +117,11 @@ export type CliStatus =
   | "ConflictingBinary"
   | "DirNotFound"
   | "NotWritable";
+
+export interface DeleteDialogInfo {
+  projectName: string;
+  branch: string;
+  isUnmerged: boolean;
+  isDirty: boolean;
+  hasUnpushedCommits: boolean;
+}

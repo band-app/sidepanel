@@ -60,8 +60,6 @@ export function ChatView({
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined);
   const [historicalMessages, setHistoricalMessages] = useState<HistoryMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [historyOffset, setHistoryOffset] = useState(0);
-  const [hasMoreHistory, setHasMoreHistory] = useState(false);
 
   const transport = useMemo(
     () =>
@@ -90,24 +88,16 @@ export function ChatView({
 
   const isStreaming = status === "submitted" || status === "streaming";
 
-  const PAGE_SIZE = 50;
-
   const loadMessages = useCallback(
-    async (sessionId: string, offset: number) => {
+    async (sessionId: string) => {
       setLoadingHistory(true);
       try {
         const res = await fetch(
-          `/api/sessions/${encodeURIComponent(workspaceId)}/${encodeURIComponent(sessionId)}/messages?limit=${PAGE_SIZE}&offset=${offset}`,
+          `/api/sessions/${encodeURIComponent(workspaceId)}/${encodeURIComponent(sessionId)}/messages`,
         );
         if (!res.ok) throw new Error("Failed to load messages");
         const data = (await res.json()) as { messages: HistoryMessage[] };
-        if (offset === 0) {
-          setHistoricalMessages(data.messages);
-        } else {
-          setHistoricalMessages((prev) => [...data.messages, ...prev]);
-        }
-        setHistoryOffset(offset + data.messages.length);
-        setHasMoreHistory(data.messages.length === PAGE_SIZE);
+        setHistoricalMessages(data.messages);
       } finally {
         setLoadingHistory(false);
       }
@@ -121,10 +111,8 @@ export function ChatView({
       setActiveSessionId(sessionId);
       setMessages([]);
       setHistoricalMessages([]);
-      setHistoryOffset(0);
-      setHasMoreHistory(false);
       onShowSessionListChange(false);
-      await loadMessages(sessionId, 0);
+      await loadMessages(sessionId);
     },
     [loadMessages, setMessages, onShowSessionListChange],
   );
@@ -133,17 +121,9 @@ export function ChatView({
     sessionIdRef.current = undefined;
     setActiveSessionId(undefined);
     setHistoricalMessages([]);
-    setHistoryOffset(0);
-    setHasMoreHistory(false);
     setMessages([]);
     onShowSessionListChange(false);
   }, [setMessages, onShowSessionListChange]);
-
-  const handleLoadMore = useCallback(() => {
-    if (activeSessionId && !loadingHistory) {
-      loadMessages(activeSessionId, historyOffset);
-    }
-  }, [activeSessionId, loadingHistory, historyOffset, loadMessages]);
 
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
@@ -178,20 +158,6 @@ export function ChatView({
               title={workspaceName}
               description="Send a message to start coding"
             />
-          )}
-
-          {hasMoreHistory && (
-            <div className="flex justify-center py-3">
-              <button
-                type="button"
-                onClick={handleLoadMore}
-                disabled={loadingHistory}
-                className="inline-flex items-center gap-2 rounded-md bg-secondary px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-secondary/80 disabled:opacity-50"
-              >
-                {loadingHistory ? <Loader2 className="size-3 animate-spin" /> : null}
-                Load earlier messages
-              </button>
-            </div>
           )}
 
           {loadingHistory && historicalMessages.length === 0 && (

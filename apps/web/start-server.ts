@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { join } from "node:path";
 import sirv from "sirv";
 import { createAuthMiddleware } from "./auth.ts";
-import { startBranchStatusPoller, stopBranchStatusPoller } from "./src/lib/branch-status-poller.ts";
+import { stopBranchStatusPoller } from "./src/lib/branch-status-poller.ts";
 import { checkPrereqs } from "./src/lib/process-utils.ts";
 import { loadSettings } from "./src/lib/state.ts";
 import { startTunnel, stopTunnel } from "./src/lib/tunnel.ts";
@@ -89,8 +89,8 @@ async function main() {
   httpServer.listen(port, "0.0.0.0", () => {
     console.log(`Web server listening on http://0.0.0.0:${port}`);
 
-    // Start branch status poller
-    startBranchStatusPoller();
+    // Branch status poller is started lazily by the watcher
+    // when the first SSE subscriber connects.
 
     // Auto-start tunnel if configured
     const settings = loadSettings() as Record<string, unknown>;

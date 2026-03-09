@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { watch } from "chokidar";
+import { startBranchStatusPoller, stopBranchStatusPoller } from "./branch-status-poller";
 import {
   bandHome,
   loadCurrentStatuses,
@@ -146,6 +147,7 @@ export function emit(event: StatusEvent) {
 export function subscribe(listener: StatusListener): () => void {
   listeners.add(listener);
   startWatchers();
+  startBranchStatusPoller();
 
   // Send current agent status snapshot
   const statuses = loadCurrentStatuses();
@@ -161,6 +163,7 @@ export function subscribe(listener: StatusListener): () => void {
   return () => {
     listeners.delete(listener);
     if (listeners.size === 0) {
+      stopBranchStatusPoller();
       if (agentWatcher) {
         agentWatcher.close();
         agentWatcher = null;

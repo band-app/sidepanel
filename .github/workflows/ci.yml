@@ -11,50 +11,16 @@ concurrency:
 jobs:
   check:
     name: Lint, Test & Build
-    runs-on: macos-latest
+    runs-on: [self-hosted, linux, arm64]
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ~/.pnpm-store
-          key: pnpm-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
-
-      - name: Cache Cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: cargo-registry-${{ runner.os }}-
-
-      - name: Cache CLI target
-        uses: actions/cache@v4
-        with:
-          path: apps/cli/target
-          key: cargo-cli-${{ runner.os }}-${{ hashFiles('apps/cli/Cargo.lock') }}
-          restore-keys: cargo-cli-${{ runner.os }}-
-
+      - name: Build CLI
+        run: |
+          source "$HOME/.cargo/env"
+          cargo build --release --manifest-path apps/cli/Cargo.toml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -64,17 +30,18 @@ jobs:
 
       - name: Lint (cargo fmt)
         run: |
+          source "$HOME/.cargo/env"
           cargo fmt --manifest-path apps/cli/Cargo.toml -- --check
           cargo fmt --manifest-path apps/dashboard/src-tauri/Cargo.toml -- --check
 
       - name: Lint (cargo clippy — CLI)
-        run: cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings
-
-      - name: Build CLI
-        run: pnpm build:cli
+        run: |
+          source "$HOME/.cargo/env"
+          cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings
 
       - name: Lint (cargo clippy — Dashboard)
         run: |
+          source "$HOME/.cargo/env"
           mkdir -p apps/web/dist
           touch apps/web/dist/start-server.mjs
           cargo clippy --manifest-path apps/dashboard/src-tauri/Cargo.toml -- -D warnings
@@ -86,12 +53,14 @@ jobs:
         run: pnpm --filter @band/web test
 
       - name: Test (CLI)
-        run: cargo test --manifest-path apps/cli/Cargo.toml
+        run: |
+          source "$HOME/.cargo/env"
+          cargo test --manifest-path apps/cli/Cargo.toml
 
       - name: Test (Dashboard)
-        run: cargo test --manifest-path apps/dashboard/src-tauri/Cargo.toml
+        run: |
+          source "$HOME/.cargo/env"
+          cargo test --manifest-path apps/dashboard/src-tauri/Cargo.toml
 
       - name: Build frontend
         run: pnpm --filter @band/dashboard build
-
-

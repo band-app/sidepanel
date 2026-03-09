@@ -65,7 +65,7 @@ export class ClaudeCodeAdapter implements CodingAgent {
         return { behavior: "allow" };
       }
 
-      const approvalId = crypto.randomUUID();
+      const approvalId = options.toolUseID;
       log.info(
         { toolName, approvalId, toolUseID: options.toolUseID },
         "AskUserQuestion intercepted",

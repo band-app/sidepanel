@@ -1,6 +1,7 @@
 import { createLogger } from "@band/logger";
 import type { UIMessageChunk } from "ai";
 import { getOrCreateAgent } from "./agent-pool";
+import { createPendingInput } from "./pending-inputs";
 import { resolveWorkspace } from "./workspace";
 
 const log = createLogger("task-runner");
@@ -102,6 +103,10 @@ async function runTask(workspaceId: string, task: InternalTask) {
   }
 
   const agent = await getOrCreateAgent(workspaceId, workspace.worktree.path);
+
+  agent.onUserInputNeeded = async (request) => {
+    return createPendingInput(request.approvalId);
+  };
 
   let textPartId = "";
   let textStarted = false;

@@ -530,3 +530,229 @@ describe("GET /api/sessions/:workspaceId/:sessionId/messages — validation", ()
     expect(body.error).toContain("not found");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Helpers — polling
+// ---------------------------------------------------------------------------
+
+async function waitFor(
+  fn: () => Promise<boolean>,
+  { timeout = 10_000, interval = 100 } = {},
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      if (await fn()) return;
+    } catch {
+      // ignore and retry
+    }
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  throw new Error(`waitFor timed out after ${timeout}ms`);
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/chat/answer — Validation
+// ---------------------------------------------------------------------------
+
+describe("POST /api/chat/answer — validation", () => {
+  let server: ServerHandle;
+  let tmpHome: string;
+
+  beforeAll(async () => {
+    tmpHome = createTmpHome();
+    seedState(tmpHome, createDefaultState(tmpHome));
+    seedSettings(tmpHome, defaultSettings());
+    server = await startServer({ tmpHome });
+  });
+
+  afterAll(async () => {
+    await server.close();
+    rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  it("returns 400 when approvalId is missing", async () => {
+    const res = await fetch(`${server.url}/api/chat/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answers: { q: "a" } }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 when answers are missing", async () => {
+    const res = await fetch(`${server.url}/api/chat/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ approvalId: "some-id" }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 when answering a non-existent approvalId", async () => {
+    const res = await fetch(`${server.url}/api/chat/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        approvalId: "non-existent-id",
+        answers: { question: "answer" },
+      }),
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task submit + stream — AskUserQuestion
+// ---------------------------------------------------------------------------
+
+describe("Task submit + stream — AskUserQuestion", () => {
+  let server: ServerHandle;
+  let tmpHome: string;
+
+  beforeAll(async () => {
+    tmpHome = createTmpHome();
+    seedState(tmpHome, createDefaultState(tmpHome));
+
+    const askInput = {
+      questions: [
+        {
+          question: "Which approach do you prefer?",
+          header: "Approach",
+          options: [
+            { label: "Option A", description: "First approach" },
+            { label: "Option B", description: "Second approach" },
+          ],
+          multiSelect: false,
+        },
+      ],
+    };
+
+    const scenarioPath = writeScenario(tmpHome, [
+      {
+        type: "system",
+        subtype: "init",
+        session_id: "ask-session-123",
+      },
+      {
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              id: "tool-ask-1",
+              name: "AskUserQuestion",
+              input: askInput,
+            },
+          ],
+        },
+      },
+      // The binary sends a control_request to the SDK asking for permission
+      // to execute AskUserQuestion. The SDK calls canUseTool which blocks
+      // until the user answers via /api/chat/answer.
+      {
+        type: "control_request",
+        request_id: "req-1",
+        request: {
+          subtype: "can_use_tool",
+          tool_name: "AskUserQuestion",
+          input: askInput,
+          tool_use_id: "tool-ask-1",
+        },
+      },
+      // Pause until the SDK writes the control_response back to stdin.
+      { _wait_for_stdin: true },
+      // After the SDK responds (deny), the binary outputs the tool result
+      // and the model's follow-up response.
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool-ask-1",
+              content: "The user selected:\nWhich approach do you prefer?: Option A",
+            },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          content: [{ type: "text", text: "Great, proceeding with your choice." }],
+        },
+      },
+      {
+        type: "result",
+        subtype: "success",
+        session_id: "ask-session-123",
+        duration_ms: 5000,
+        num_turns: 2,
+        total_cost_usd: 0.1,
+      },
+    ]);
+
+    seedSettings(tmpHome, {
+      codingAgent: { type: "claude-code", command: FAKE_AGENT_PATH },
+    });
+
+    server = await startServer({ tmpHome, scenarioPath });
+  });
+
+  afterAll(async () => {
+    await server.close();
+    rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  it("streams AskUserQuestion tool call and resumes after /api/chat/answer", async () => {
+    const workspaceId = "testproject-main";
+    const toolCallId = "tool-ask-1";
+
+    // 1. Submit the task
+    const submitRes = await fetch(`${server.url}/api/tasks/submit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId, prompt: "test ask" }),
+    });
+    expect(submitRes.status).toBe(202);
+
+    // 2. Poll until the pending input is created, then answer
+    await waitFor(async () => {
+      const res = await fetch(`${server.url}/api/chat/answer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approvalId: toolCallId,
+          answers: { "Which approach do you prefer?": "Option A" },
+        }),
+      });
+      return res.ok;
+    });
+
+    // 3. Wait for the task to complete
+    await waitFor(async () => {
+      const res = await fetch(`${server.url}/api/tasks/${encodeURIComponent(workspaceId)}`);
+      const data = (await res.json()) as { task?: { status: string } };
+      return data.task?.status !== "running";
+    });
+
+    // 4. Read the buffered events from the completed stream
+    const streamRes = await fetch(
+      `${server.url}/api/tasks/${encodeURIComponent(workspaceId)}/stream`,
+    );
+    expect(streamRes.status).toBe(200);
+    const events = await parseSSEStream(streamRes);
+    const eventTypes = events.map((e) => e.event).filter(Boolean) as string[];
+
+    // AskUserQuestion tool call was emitted
+    expect(eventTypes).toContain("tool-input-available");
+    const toolInputEvent = events.find((e) => e.event === "tool-input-available");
+    expect(toolInputEvent).toBeDefined();
+    expect((toolInputEvent!.data as Record<string, unknown>).toolName).toBe("AskUserQuestion");
+    expect((toolInputEvent!.data as Record<string, unknown>).toolCallId).toBe(toolCallId);
+
+    // The stream completed successfully
+    expect(eventTypes).toContain("data-result");
+    expect(eventTypes).toContain("finish");
+  });
+});

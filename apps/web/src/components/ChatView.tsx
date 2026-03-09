@@ -37,15 +37,19 @@ const ERROR_STATES = new Set<ToolPart["state"]>(["output-error", "output-denied"
 
 function toolPartToItem(part: ToolPart): ToolCallItem {
   const approval = "approval" in part ? (part.approval as { id?: string } | undefined) : undefined;
+  const toolName = getToolName(part);
   return {
     toolCallId: part.toolCallId,
-    toolName: getToolName(part),
+    toolName,
     input: part.input,
     output: part.output,
     errorText: part.errorText,
     isError: ERROR_STATES.has(part.state),
     isInProgress: IN_PROGRESS_STATES.has(part.state),
-    approvalId: approval?.id,
+    // AskUserQuestion uses toolCallId as the approval key since the
+    // canUseTool callback in the agent adapter manages the pending-input
+    // lifecycle directly (not through the AI SDK approval mechanism).
+    approvalId: toolName === "AskUserQuestion" ? part.toolCallId : approval?.id,
   };
 }
 

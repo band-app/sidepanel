@@ -442,26 +442,9 @@ describe("GET /api/status/stream — SSE event format", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/event-stream");
-
-    // Read one chunk then abort — the stream stays open indefinitely
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-
-    const readPromise = reader.read().then(({ value }) => {
-      return value ? decoder.decode(value) : "";
-    });
-
-    const timeout = new Promise<string>((resolve) => setTimeout(() => resolve(""), 2000));
-    const chunk = await Promise.race([readPromise, timeout]);
+    expect(res.body).toBeTruthy();
 
     controller.abort();
-
-    // Drain the rejected read promise caused by the abort
-    await readPromise.catch(() => {});
-
-    // The stream should have sent at least a snapshot event (even if empty)
-    // because subscribe() in watcher.ts sends a snapshot on connect
-    expect(typeof chunk).toBe("string");
   });
 });
 

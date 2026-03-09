@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import { accessSync, constants, lstatSync, realpathSync, symlinkSync, unlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
@@ -97,14 +96,6 @@ export async function installCli(): Promise<void> {
     }
     symlinkSync(binaryPath, SYMLINK_PATH);
   } else {
-    // Need elevated permissions — use osascript to prompt for admin auth
-    const script = `do shell script "ln -sf '${binaryPath}' '${SYMLINK_PATH}'" with administrator privileges`;
-    try {
-      execSync(`osascript -e '${script}'`, { stdio: "pipe" });
-    } catch {
-      throw new Error(
-        `Permission denied. Run manually: sudo ln -sf "${binaryPath}" "${SYMLINK_PATH}"`,
-      );
-    }
+    throw new Error(`Run: sudo ln -sf "${binaryPath}" "${SYMLINK_PATH}"`);
   }
 }

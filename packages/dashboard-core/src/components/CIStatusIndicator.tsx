@@ -10,10 +10,9 @@ interface Props {
 export function CIStatusIndicator({ ci }: Props) {
   const capabilities = useCapabilities();
 
-  const handleOpenUrl = (url: string | undefined, e: React.MouseEvent) => {
-    if (!url) return;
+  const handleOpenUrl = (url: string | undefined | null, e: React.MouseEvent) => {
     e.stopPropagation();
-    capabilities.openUrl?.(url);
+    if (url) capabilities.openUrl?.(url);
   };
 
   const clickable = !!ci.url && !!capabilities.openUrl;

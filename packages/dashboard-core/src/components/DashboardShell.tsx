@@ -71,88 +71,6 @@ export function DashboardShell({ toolbarExtra }: DashboardShellProps) {
         </ScrollArea>
       ) : (
         <>
-          {error && (
-            <div className="mx-4 mt-2 px-4 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive flex items-center justify-between gap-2">
-              <button
-                type="button"
-                className="truncate text-left cursor-pointer hover:underline"
-                onClick={() => setShowErrorDialog(true)}
-              >
-                {error}
-              </button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="text-destructive shrink-0"
-                onClick={clearError}
-              >
-                <X />
-              </Button>
-            </div>
-          )}
-
-          <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="text-destructive">Error</DialogTitle>
-                <DialogDescription>Click the error text to select it.</DialogDescription>
-              </DialogHeader>
-              <pre className="whitespace-pre-wrap break-words text-sm bg-muted/50 rounded-md p-3 max-h-64 overflow-auto select-all cursor-text">
-                {error}
-              </pre>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (error) navigator.clipboard.writeText(error);
-                  }}
-                >
-                  Copy
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => {
-                    setShowErrorDialog(false);
-                    clearError();
-                  }}
-                >
-                  Dismiss
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {hooksState.status === "needs_install" && (
-            <div className="mx-4 mt-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm flex items-center justify-between gap-2">
-              <span className="text-blue-200">
-                Install Claude Code hooks for agent status detection
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0 text-xs"
-                onClick={installHooks}
-              >
-                Install
-              </Button>
-            </div>
-          )}
-
-          {(cliState.status === "manual" || cliState.status === "conflict") && (
-            <div className="mx-4 mt-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm flex items-center justify-between gap-2">
-              <span className="text-blue-200">
-                {cliState.status === "conflict"
-                  ? "A different `band` binary exists — replace it to use the bundled CLI"
-                  : `Install \`band\` CLI to /usr/local/bin (${cliState.reason})`}
-              </span>
-              <Button variant="outline" size="sm" className="shrink-0 text-xs" onClick={installCli}>
-                Install
-              </Button>
-            </div>
-          )}
-
           <div className="flex items-center justify-between px-4 py-2">
             <div className="flex items-center gap-1">
               <Tooltip>
@@ -256,6 +174,88 @@ export function DashboardShell({ toolbarExtra }: DashboardShellProps) {
               )}
             </main>
           </ScrollArea>
+
+          {(cliState.status === "manual" || cliState.status === "conflict") && (
+            <div className="mx-4 mb-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm flex items-center justify-between gap-2">
+              <span className="text-blue-200">
+                {cliState.status === "conflict"
+                  ? "A different `band` binary exists — replace it to use the bundled CLI"
+                  : `Install \`band\` CLI to /usr/local/bin (${cliState.reason})`}
+              </span>
+              <Button variant="outline" size="sm" className="shrink-0 text-xs" onClick={installCli}>
+                Install
+              </Button>
+            </div>
+          )}
+
+          {hooksState.status === "needs_install" && (
+            <div className="mx-4 mb-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm flex items-center justify-between gap-2">
+              <span className="text-blue-200">
+                Install Claude Code hooks for agent status detection
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-xs"
+                onClick={installHooks}
+              >
+                Install
+              </Button>
+            </div>
+          )}
+
+          {error && (
+            <div className="mx-4 mb-2 px-4 py-2 bg-destructive/10 border border-destructive/30 rounded-lg text-sm text-destructive flex items-center justify-between gap-2">
+              <button
+                type="button"
+                className="truncate text-left cursor-pointer hover:underline"
+                onClick={() => setShowErrorDialog(true)}
+              >
+                {error}
+              </button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="text-destructive shrink-0"
+                onClick={clearError}
+              >
+                <X />
+              </Button>
+            </div>
+          )}
+
+          <Dialog open={showErrorDialog} onOpenChange={setShowErrorDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="text-destructive">Error</DialogTitle>
+                <DialogDescription>Click the error text to select it.</DialogDescription>
+              </DialogHeader>
+              <pre className="whitespace-pre-wrap break-words text-sm bg-muted/50 rounded-md p-3 max-h-64 overflow-auto select-all cursor-text">
+                {error}
+              </pre>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (error) navigator.clipboard.writeText(error);
+                  }}
+                >
+                  Copy
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    setShowErrorDialog(false);
+                    clearError();
+                  }}
+                >
+                  Dismiss
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <AddProjectDialog
             open={showAddDialog}

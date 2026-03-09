@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
 import { gitCmd } from "../../lib/git";
-import { bandHome, loadState, worktreesDir } from "../../lib/state";
+import { bandHome, loadState, saveState, worktreesDir } from "../../lib/state";
 
 export const Route = createFileRoute("/api/workspaces/create")({
   server: {
@@ -20,6 +20,11 @@ export const Route = createFileRoute("/api/workspaces/create")({
         const proj = state.projects.find((p) => p.name === project);
         if (!proj) {
           return Response.json({ error: `Project "${project}" not found` }, { status: 404 });
+        }
+
+        // Already tracked — nothing to do
+        if (proj.worktrees.some((wt) => wt.branch === branch)) {
+          return Response.json({ ok: true });
         }
 
         const wtDir = worktreesDir();
@@ -42,6 +47,10 @@ export const Route = createFileRoute("/api/workspaces/create")({
             { status: 500 },
           );
         }
+
+        // Persist workspace to state so Tauri's workspace_open can find it
+        proj.worktrees.push({ branch, path: worktreePath, head: null });
+        saveState(state);
 
         if (prompt) {
           const workspaceId = `${project}-${branch}`;

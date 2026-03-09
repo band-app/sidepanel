@@ -3,7 +3,7 @@ import { unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
 import { gitCmd } from "../../lib/git";
-import { bandHome, loadState } from "../../lib/state";
+import { bandHome, loadState, saveState } from "../../lib/state";
 
 export const Route = createFileRoute("/api/workspaces/remove")({
   server: {
@@ -58,6 +58,10 @@ export const Route = createFileRoute("/api/workspaces/remove")({
                 } catch {
                   // Branch may already be deleted
                 }
+                // Remove from state.json
+                proj.worktrees = proj.worktrees.filter((wt) => wt.branch !== branch);
+                saveState(state);
+
                 // Clean up prompt file
                 const workspaceId = `${project}-${branch}`;
                 try {

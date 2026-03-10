@@ -29,16 +29,19 @@ function trpcDevPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [trpcDevPlugin(), tanstackStart(), react(), tailwindcss()],
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "./src"),
     },
   },
-  ssr: {
-    // Bundle all dependencies into server.js so the Tauri DMG
-    // doesn't need node_modules at runtime.
-    noExternal: true,
-  },
-});
+  ssr:
+    command === "build"
+      ? {
+          // Bundle all dependencies into server.js so the Tauri DMG
+          // doesn't need node_modules at runtime.
+          noExternal: true,
+        }
+      : undefined,
+}));

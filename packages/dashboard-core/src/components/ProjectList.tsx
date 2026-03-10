@@ -417,7 +417,9 @@ export function ProjectList({ labelFilter, editMode }: ProjectListProps) {
         ref={containerRef}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        onPointerDown={() => { keyboardNavRef.current = false; }}
+        onPointerDown={() => {
+          keyboardNavRef.current = false;
+        }}
         className="flex flex-col gap-1 outline-none min-w-0"
       >
         <DndContext

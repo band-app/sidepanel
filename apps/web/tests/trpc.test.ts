@@ -392,7 +392,10 @@ describe("tRPC — workspace operations", () => {
         },
       ],
     });
-    seedSettings(tmpHome, { tokenSecret: DEFAULT_TOKEN, worktreesDir: join(tmpHome, ".band", "worktrees") });
+    seedSettings(tmpHome, {
+      tokenSecret: DEFAULT_TOKEN,
+      worktreesDir: join(tmpHome, ".band", "worktrees"),
+    });
     server = await startServer({ tmpHome });
   });
 

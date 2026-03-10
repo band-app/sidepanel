@@ -253,9 +253,14 @@ describe("tunnel.start — parses URL from emoji-prefixed instatunnel output", (
   });
 
   it("starts tunnel and extracts URL with subdomain", async () => {
-    const res = await trpcMutate(server.url, "tunnel.start", {}, {
-      headers: { Cookie: authCookie(DEFAULT_TOKEN) },
-    });
+    const res = await trpcMutate(
+      server.url,
+      "tunnel.start",
+      {},
+      {
+        headers: { Cookie: authCookie(DEFAULT_TOKEN) },
+      },
+    );
     expect(res.status).toBe(200);
 
     // Wait for tunnel status to report running with URL
@@ -312,9 +317,14 @@ describe("tunnel.start — returns URL in mutation response", () => {
   });
 
   it("mutation response includes the tunnel URL", async () => {
-    const res = await trpcMutate(server.url, "tunnel.start", {}, {
-      headers: { Cookie: authCookie(DEFAULT_TOKEN) },
-    });
+    const res = await trpcMutate(
+      server.url,
+      "tunnel.start",
+      {},
+      {
+        headers: { Cookie: authCookie(DEFAULT_TOKEN) },
+      },
+    );
     expect(res.status).toBe(200);
     const data = await trpcData<{ ok: boolean; url: string | null }>(res);
     expect(data.ok).toBe(true);
@@ -354,9 +364,14 @@ describe("tunnel.start — subdomain taken resolves without error", () => {
   });
 
   it("returns 200 with null URL when subdomain is taken", async () => {
-    const res = await trpcMutate(server.url, "tunnel.start", { subdomain: "taken-sub" }, {
-      headers: { Cookie: authCookie(DEFAULT_TOKEN) },
-    });
+    const res = await trpcMutate(
+      server.url,
+      "tunnel.start",
+      { subdomain: "taken-sub" },
+      {
+        headers: { Cookie: authCookie(DEFAULT_TOKEN) },
+      },
+    );
     expect(res.status).toBe(200);
     const data = await trpcData<{ ok: boolean; url: string | null }>(res);
     expect(data.ok).toBe(true);
@@ -476,9 +491,14 @@ describe("services.health — with running local tunnel process", () => {
 
   it("reports tunnel URL via services.health after tunnel starts", async () => {
     // Start the tunnel
-    await trpcMutate(server.url, "tunnel.start", {}, {
-      headers: { Cookie: authCookie(DEFAULT_TOKEN) },
-    });
+    await trpcMutate(
+      server.url,
+      "tunnel.start",
+      {},
+      {
+        headers: { Cookie: authCookie(DEFAULT_TOKEN) },
+      },
+    );
 
     // Wait for tunnel to be running
     await waitFor(async () => {

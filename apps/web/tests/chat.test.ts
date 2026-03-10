@@ -243,9 +243,12 @@ async function submitAndStream(
   await new Promise((r) => setTimeout(r, 100));
 
   // SSE stream stays as REST
-  const streamRes = await fetch(`${serverUrl}/api/tasks/${encodeURIComponent(workspaceId)}/stream`, {
-    headers: defaultHeaders,
-  });
+  const streamRes = await fetch(
+    `${serverUrl}/api/tasks/${encodeURIComponent(workspaceId)}/stream`,
+    {
+      headers: defaultHeaders,
+    },
+  );
   const events = await parseSSEStream(streamRes);
 
   return { submitRes, streamRes, events };

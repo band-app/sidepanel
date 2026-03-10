@@ -82,9 +82,9 @@ pub(crate) fn which_binary(name: &str) -> Result<String, String> {
 /// Read the token from settings.json (web server creates it).
 fn get_token() -> Result<String, String> {
     let settings = load_settings()?;
-    settings
-        .token_secret
-        .ok_or_else(|| "tokenSecret not found in settings.json — start the web server first".to_string())
+    settings.token_secret.ok_or_else(|| {
+        "tokenSecret not found in settings.json — start the web server first".to_string()
+    })
 }
 
 /// Send SIGTERM to the entire process group, then fall back to SIGKILL.
@@ -269,10 +269,7 @@ fn check_local_health_sync(port: u16, token: &str) -> bool {
 
 /// Kill any process listening on the given port.
 pub(crate) fn kill_port_sync(port: u16) {
-    if let Ok(output) = Command::new("lsof")
-        .args([&format!("-ti:{port}")])
-        .output()
-    {
+    if let Ok(output) = Command::new("lsof").args([&format!("-ti:{port}")]).output() {
         if output.status.success() {
             let pids = String::from_utf8_lossy(&output.stdout);
             for pid in pids.split_whitespace() {

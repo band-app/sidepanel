@@ -579,15 +579,15 @@ pub fn start_focus_polling(app_handle: tauri::AppHandle) {
 
 /// Raise the VS Code window matching the branch to front without activating VS Code.
 /// Uses `AXRaise` via `AppleScript` so VS Code doesn't steal focus from the dashboard.
-pub fn raise_vscode_window(branch: &str) {
-    let branch = branch.to_string();
+pub fn raise_vscode_window(folder_name: &str) {
+    let folder_name = folder_name.to_string();
     std::thread::spawn(move || {
         let script = format!(
             r#"tell application "System Events"
     if exists (first process whose bundle identifier is "com.microsoft.VSCode") then
         tell (first process whose bundle identifier is "com.microsoft.VSCode")
             repeat with w in windows
-                if title of w contains "{branch}" then
+                if title of w contains "{folder_name}" then
                     perform action "AXRaise" of w
                     exit repeat
                 end if
@@ -605,8 +605,8 @@ end tell"#
 
 /// Use `AppleScript` + System Events to position the VS Code window
 /// to fill the screen to the right of the dashboard.
-pub fn align_vscode_window(branch: &str) {
-    let branch = branch.to_string();
+pub fn align_vscode_window(folder_name: &str) {
+    let folder_name = folder_name.to_string();
     std::thread::spawn(move || {
         let script = format!(
             r#"
@@ -626,7 +626,7 @@ tell application "System Events"
     tell (first process whose bundle identifier is "com.microsoft.VSCode")
         set foundWindow to false
         repeat with w in windows
-            if title of w contains "{branch}" then
+            if title of w contains "{folder_name}" then
                 set position of w to {{dashWidth, 0}}
                 set size of w to {{vsW, vsH}}
                 set foundWindow to true
@@ -658,35 +658,50 @@ pub fn workspace_focus(workspace_id: String) -> Result<(), String> {
         for wt in &proj.worktrees {
             let ws_id = format!("{}-{}", proj.name, wt.branch);
             if ws_id == workspace_id {
-                // Focus VS Code window with matching folder
+                let folder_name = Path::new(&wt.path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_string();
+
+                // Focus VS Code window with matching folder name
                 let script = format!(
                     r#"tell application "Visual Studio Code"
     activate
     set foundWindow to false
     repeat with w in windows
-        if name of w contains "{}" then
+        if name of w contains "{folder_name}" then
             set index of w to 1
             set foundWindow to true
             exit repeat
         end if
     end repeat
-    if not foundWindow then
-        do shell script "code '{}'"
-    end if
-end tell"#,
-                    wt.branch, wt.path
+end tell
+return foundWindow"#
                 );
 
-                std::process::Command::new("osascript")
+                let output = std::process::Command::new("osascript")
                     .args(["-e", &script])
                     .output()
                     .map_err(|e| format!("Failed to focus window: {e}"))?;
+
+                let found = String::from_utf8_lossy(&output.stdout)
+                    .trim()
+                    .eq_ignore_ascii_case("true");
+
+                if !found {
+                    // No matching window — open the folder in a new VS Code window
+                    std::process::Command::new("open")
+                        .args(["-a", "Visual Studio Code", &wt.path])
+                        .output()
+                        .map_err(|e| format!("Failed to open VS Code: {e}"))?;
+                }
 
                 // Track the active workspace
                 write_active_marker(&ws_id);
 
                 // Resize and position the window to the right of the dashboard
-                align_vscode_window(&wt.branch);
+                align_vscode_window(&folder_name);
 
                 return Ok(());
             }

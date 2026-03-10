@@ -308,20 +308,39 @@ fn check_local_health_sync(port: u16, token: &str) -> bool {
     }
 }
 
+/// Kill any process listening on the given port.
+fn kill_port_sync(port: u16) {
+    if let Ok(output) = Command::new("lsof")
+        .args([&format!("-ti:{port}")])
+        .output()
+    {
+        if output.status.success() {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            for pid in pids.split_whitespace() {
+                if let Ok(pid_num) = pid.parse::<i32>() {
+                    unsafe {
+                        libc::kill(pid_num, libc::SIGTERM);
+                    }
+                }
+            }
+            // Give processes a moment to exit
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+}
+
 /// Ensure the web server is running and return `(port, token)`.
 ///
-/// 1. Checks if a server is already responding on the configured port.
-/// 2. If not, spawns `node dist/start-server.mjs`.
+/// 1. Kills any existing server on the configured port.
+/// 2. Spawns `node dist/start-server.mjs`.
 /// 3. Polls the health endpoint until ready (max 15 s).
 pub(crate) fn ensure_webserver_running() -> Result<(u16, String), String> {
     let port = get_configured_port();
     let secret = get_or_create_secret()?;
     let token = compute_token(&secret);
 
-    // Already running?
-    if check_local_health_sync(port, &token) {
-        return Ok((port, token));
-    }
+    // Kill any stale server so we always run our bundled version
+    kill_port_sync(port);
 
     let web_dir = resolve_web_dir()?;
     let start_script = web_dir.join("dist/start-server.mjs");

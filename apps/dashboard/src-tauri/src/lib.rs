@@ -41,16 +41,19 @@ pub fn run() {
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
 
-            // Auto-start the web server and navigate with auth token
-            match webserver::ensure_webserver_running() {
-                Ok((port, token)) => {
-                    let url_str = format!("http://localhost:{port}?token={token}");
-                    if let Ok(url) = url::Url::parse(&url_str) {
-                        let _ = window.navigate(url);
+            // Auto-start the web server in release builds.
+            // In dev mode, `beforeDevCommand` already starts the Vite dev server.
+            if cfg!(not(debug_assertions)) {
+                match webserver::ensure_webserver_running() {
+                    Ok((port, token)) => {
+                        let url_str = format!("http://localhost:{port}?token={token}");
+                        if let Ok(url) = url::Url::parse(&url_str) {
+                            let _ = window.navigate(url);
+                        }
                     }
-                }
-                Err(e) => {
-                    eprintln!("Failed to start web server: {e}");
+                    Err(e) => {
+                        eprintln!("Failed to start web server: {e}");
+                    }
                 }
             }
 
@@ -135,7 +138,11 @@ pub fn run() {
                                     for wt in &proj.worktrees {
                                         let id = format!("{}-{}", proj.name, wt.branch);
                                         if id == marker.workspace_id {
-                                            commands::ide::raise_vscode_window(&wt.branch);
+                                            let folder = std::path::Path::new(&wt.path)
+                                                .file_name()
+                                                .and_then(|n| n.to_str())
+                                                .unwrap_or("");
+                                            commands::ide::raise_vscode_window(folder);
                                             return;
                                         }
                                     }

@@ -581,7 +581,8 @@ const tunnelRouter = t.router({
         subdomain: subdomain as string | undefined,
         skipSubdomain: input.skipSubdomain,
       });
-      return { ok: true };
+      const status = getTunnelStatus();
+      return { ok: true, url: status.url };
     }),
 
   stop: publicProcedure.mutation(async () => {
@@ -780,16 +781,33 @@ const servicesRouter = t.router({
   health: publicProcedure.query(async () => {
     const tunnel = getTunnelStatus();
     let tunnelHealthy = false;
+    let tunnelUrl = tunnel.url;
     let tunnelRemoteHost: string | undefined;
+    const token = getToken();
 
-    if (tunnel.running && tunnel.url) {
-      const token = getToken();
-      if (token) {
-        const urlMatch = tunnel.url.match(/https:\/\/(.+)\.instatunnel\.my/);
-        if (urlMatch) {
-          const health = await checkTunnelHealth(urlMatch[1], token);
-          tunnelHealthy = health.healthy;
+    // Check local tunnel process first
+    if (tunnel.running && tunnel.url && token) {
+      const urlMatch = tunnel.url.match(/https:\/\/(.+)\.instatunnel\.my/);
+      if (urlMatch) {
+        const health = await checkTunnelHealth(urlMatch[1], token);
+        tunnelHealthy = health.healthy;
+        tunnelRemoteHost = health.remoteHost;
+      }
+    }
+
+    // If no local tunnel, check if the configured subdomain is alive remotely
+    // (handles app restart while tunnel is still active on the server)
+    if (!tunnelHealthy && token) {
+      const settings = loadSettings();
+      const subdomain = (settings as Record<string, unknown>).tunnelSubdomain as
+        | string
+        | undefined;
+      if (subdomain) {
+        const health = await checkTunnelHealth(subdomain, token);
+        if (health.healthy) {
+          tunnelHealthy = true;
           tunnelRemoteHost = health.remoteHost;
+          tunnelUrl = `https://${subdomain}.instatunnel.my?token=${token}`;
         }
       }
     }
@@ -797,7 +815,7 @@ const servicesRouter = t.router({
     return {
       webserver: true,
       tunnel: tunnelHealthy,
-      tunnel_url: tunnel.url,
+      tunnel_url: tunnelUrl,
       tunnel_remote_host: tunnelRemoteHost || tunnel.remoteHost,
     };
   }),

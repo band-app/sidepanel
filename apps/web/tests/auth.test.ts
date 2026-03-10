@@ -70,7 +70,7 @@ describe("auth middleware (with secret)", () => {
     expect(setCookie).toContain(`band_token=${EXPECTED_TOKEN}`);
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("SameSite=Strict");
-    expect(setCookie).toContain("Max-Age=86400");
+    expect(setCookie).toContain("Max-Age=31536000");
   });
 
   it("valid token on any path sets cookie and passes through", async () => {

@@ -8,6 +8,11 @@ let tunnelUrl: string | null = null;
 let tunnelSubdomain: string | null = null;
 let tunnelRemoteHost: string | null = null;
 
+function extractUrl(text: string): string | null {
+  const match = text.match(/https:\/\/[^\s]+\.instatunnel\.my/);
+  return match ? match[0] : null;
+}
+
 function extractSubdomain(url: string): string | null {
   const match = url.match(/^https:\/\/(.+)\.instatunnel\.my/);
   if (!match) return null;
@@ -45,6 +50,7 @@ export async function startTunnel(options: {
 
     tunnelProcess = child;
     let settled = false;
+    let subdomainTaken = false;
     const stderrChunks: string[] = [];
 
     const handleOutput = (data: Buffer) => {
@@ -53,12 +59,13 @@ export async function startTunnel(options: {
         const trimmed = line.trim();
         if (!trimmed) continue;
 
-        if (trimmed.startsWith("https://") && trimmed.includes("instatunnel.my")) {
-          const sub = extractSubdomain(trimmed);
+        const url = extractUrl(trimmed);
+        if (url) {
+          const sub = extractSubdomain(url);
           if (sub) {
             tunnelSubdomain = sub;
             const token = getToken();
-            tunnelUrl = appendToken(trimmed, token);
+            tunnelUrl = appendToken(url, token);
 
             emit({ kind: "tunnel-url", url: tunnelUrl });
 
@@ -68,6 +75,7 @@ export async function startTunnel(options: {
             }
           }
         } else if (trimmed.includes("subdomain") && trimmed.toLowerCase().includes("taken")) {
+          subdomainTaken = true;
           emit({ kind: "tunnel-subdomain-taken", subdomain: options.subdomain });
         } else if (trimmed.includes("remote host:")) {
           const host = trimmed.split("remote host:")[1]?.trim();
@@ -105,7 +113,7 @@ export async function startTunnel(options: {
       tunnelRemoteHost = null;
       if (!settled) {
         settled = true;
-        if (code !== 0) {
+        if (code !== 0 && !subdomainTaken) {
           reject(
             new Error(`instatunnel exited with code ${code}: ${stderrChunks.join("").trim()}`),
           );

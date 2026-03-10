@@ -57,12 +57,17 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
       }
 
       setStep("connecting");
-      await trpc.tunnel.start.mutate({});
+      const result = await trpc.tunnel.start.mutate({});
+      if (result.url) {
+        setTunnelUrl(result.url);
+        setStep("ready");
+        onTunnelUrl?.(result.url);
+      }
     } catch (e) {
       setError(String(e));
       setStep("error");
     }
-  }, [settings.tunnelSubdomain]);
+  }, [settings.tunnelSubdomain, onTunnelUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -148,7 +153,12 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
         return;
       }
       setStep("connecting");
-      await trpc.tunnel.start.mutate({});
+      const result = await trpc.tunnel.start.mutate({});
+      if (result.url) {
+        setTunnelUrl(result.url);
+        setStep("ready");
+        onTunnelUrl?.(result.url);
+      }
     } catch (e) {
       setError(String(e));
       setStep("error");
@@ -158,7 +168,12 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
   const handleContinueRandom = async () => {
     try {
       setStep("connecting");
-      await trpc.tunnel.start.mutate({ skipSubdomain: true });
+      const result = await trpc.tunnel.start.mutate({ skipSubdomain: true });
+      if (result.url) {
+        setTunnelUrl(result.url);
+        setStep("ready");
+        onTunnelUrl?.(result.url);
+      }
     } catch (e) {
       setError(String(e));
       setStep("error");

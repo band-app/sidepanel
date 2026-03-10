@@ -25,7 +25,11 @@ export function useTunnel() {
       try {
         // Web server is always running (we are it), only restart tunnel
         if (!health.tunnel && !cancelled) {
-          await trpc.tunnel.start.mutate({});
+          const result = await trpc.tunnel.start.mutate({});
+          if (result.url) {
+            setTunnelUrl(result.url);
+            setWebServerRunning(true);
+          }
         }
       } catch {
         // swallow — next poll tick will retry

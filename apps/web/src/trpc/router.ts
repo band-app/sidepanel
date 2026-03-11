@@ -10,6 +10,7 @@ import {
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
+import { createLogger } from "@band/logger";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { getOrCreateAgent } from "../lib/agent-pool";
@@ -48,6 +49,8 @@ import {
 import { subscribe as subscribeStatus } from "../lib/watcher";
 import { resolveWorkspace } from "../lib/workspace";
 import type { Context } from "./context";
+
+const log = createLogger("trpc");
 
 const t = initTRPC.context<Context>().create();
 
@@ -637,15 +640,23 @@ const tunnelRouter = t.router({
   start: publicProcedure
     .input(z.object({ subdomain: z.string().optional(), skipSubdomain: z.boolean().optional() }))
     .mutation(async ({ input }) => {
+      log.debug({ input }, "tunnel.start called");
       const settings = loadSettings();
       const port = parseInt(process.env.PORT || "3456", 10);
       const subdomain = input.subdomain || (settings as Record<string, unknown>).tunnelSubdomain;
+      log.debug(
+        "tunnel.start: port=%d subdomain=%s skipSubdomain=%s",
+        port,
+        subdomain,
+        input.skipSubdomain,
+      );
       await startTunnel({
         port,
         subdomain: subdomain as string | undefined,
         skipSubdomain: input.skipSubdomain,
       });
       const status = getTunnelStatus();
+      log.debug({ status }, "tunnel.start: after startTunnel");
       if (status.url) {
         return { ok: true, url: status.url };
       }
@@ -654,10 +665,12 @@ const tunnelRouter = t.router({
       if (resolvedSubdomain) {
         const token = getToken();
         const health = await checkTunnelHealth(resolvedSubdomain, token);
+        log.debug({ health }, "tunnel.start: remote health check");
         if (health.healthy) {
           return { ok: true, url: `https://${resolvedSubdomain}.instatunnel.my?token=${token}` };
         }
       }
+      log.debug("tunnel.start: no URL available");
       return { ok: true, url: null as string | null };
     }),
 
@@ -908,7 +921,9 @@ const sessionsRouter = t.router({
 
 const servicesRouter = t.router({
   health: publicProcedure.query(async () => {
+    log.debug("services.health called");
     const tunnel = getTunnelStatus();
+    log.debug({ tunnel }, "services.health: tunnel status");
     let tunnelHealthy = false;
     let tunnelUrl = tunnel.url;
     let tunnelRemoteHost: string | undefined;
@@ -919,7 +934,9 @@ const servicesRouter = t.router({
     if (tunnel.running && tunnel.url) {
       const urlMatch = tunnel.url.match(/https:\/\/(.+)\.instatunnel\.my/);
       if (urlMatch) {
+        log.debug("services.health: checking tunnel health for %s", urlMatch[1]);
         const health = await checkTunnelHealth(urlMatch[1], token);
+        log.debug({ health }, "services.health: tunnel health");
         tunnelHealthy = health.healthy;
         // Only report as remote if it's a different machine
         if (health.remoteHost && health.remoteHost !== localHostname) {
@@ -933,8 +950,15 @@ const servicesRouter = t.router({
     if (!tunnelHealthy) {
       const settings = loadSettings();
       const subdomain = (settings as Record<string, unknown>).tunnelSubdomain as string | undefined;
+      log.debug(
+        "services.health: tunnelSubdomain=%s token=%s",
+        subdomain ?? "none",
+        token ? `${token.slice(0, 6)}...` : "null",
+      );
       if (subdomain) {
+        log.debug("services.health: checking remote subdomain %s", subdomain);
         const health = await checkTunnelHealth(subdomain, token);
+        log.debug({ health }, "services.health: remote health");
         if (health.healthy) {
           tunnelHealthy = true;
           // Only report as remote if it's a different machine
@@ -943,15 +967,19 @@ const servicesRouter = t.router({
           }
           tunnelUrl = `https://${subdomain}.instatunnel.my?token=${token}`;
         }
+      } else {
+        log.debug("services.health: no tunnelSubdomain configured, skipping remote check");
       }
     }
 
-    return {
+    const result = {
       webserver: true,
       tunnel: tunnelHealthy,
       tunnel_url: tunnelUrl,
       tunnel_remote_host: tunnelRemoteHost || tunnel.remoteHost,
     };
+    log.debug({ result }, "services.health result");
+    return result;
   }),
 });
 

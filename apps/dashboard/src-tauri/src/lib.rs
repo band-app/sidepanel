@@ -4,11 +4,8 @@ mod commands;
 mod git;
 mod state;
 
-use commands::webserver::{
-    self as webserver, ManagedProcess, TunnelInner, TunnelState, WebServerState,
-};
+use commands::webserver::{self as webserver, ManagedProcess, WebServerState};
 use state::{ActiveWorkspaceState, ProjectCache};
-use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
 const DASHBOARD_WIDTH: u32 = 400;
@@ -20,10 +17,6 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(WebServerState(ManagedProcess::new()))
-        .manage(TunnelState(Arc::new(Mutex::new(TunnelInner {
-            process: ManagedProcess::new(),
-            url: None,
-        }))))
         .manage(ActiveWorkspaceState::new())
         .manage(ProjectCache::new())
         .invoke_handler(tauri::generate_handler![
@@ -34,14 +27,6 @@ pub fn run() {
             commands::ide::reveal_in_finder,
             commands::webserver::webserver_start,
             commands::webserver::webserver_stop,
-            commands::webserver::service_health_check,
-            commands::webserver::prereq_check,
-            commands::webserver::node_install,
-            commands::webserver::tunnel_install,
-            commands::webserver::tunnel_start,
-            commands::webserver::tunnel_stop,
-            commands::webserver::webserver_get_token,
-            commands::webserver::tunnel_auth_check,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();
@@ -103,24 +88,10 @@ pub fn run() {
             // (handles projects without the Band VS Code extension)
             commands::ide::start_focus_polling(app.handle().clone());
 
-            // Kill web server and tunnel on app exit
+            // Kill web server on app exit
             let web_proc = app.state::<WebServerState>().inner().0.clone();
-            let tunnel_arc = app.state::<TunnelState>().inner().0.clone();
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    // Close the tunnel on the server via CLI
-                    if let Ok(tguard) = tunnel_arc.lock() {
-                        if let Some(ref url) = tguard.url {
-                            if let Some(name) = webserver::extract_subdomain(url) {
-                                if let Ok(bin) = webserver::which_binary("instatunnel") {
-                                    let _ = std::process::Command::new(&bin)
-                                        .args(["--kill", name])
-                                        .env("PATH", webserver::shell_path())
-                                        .output();
-                                }
-                            }
-                        }
-                    }
                     web_proc.kill();
                     // Kill any server on the port (handles the detached process
                     // spawned by ensure_webserver_running in release builds)

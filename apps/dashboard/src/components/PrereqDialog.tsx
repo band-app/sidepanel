@@ -6,16 +6,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@band/ui";
-import { invoke } from "@tauri-apps/api/core";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { trpc } from "../lib/trpc-client";
 
 type PrereqStep = "checking" | "missing" | "installing" | "error";
-
-interface PrereqStatus {
-  node: boolean;
-  instatunnel: boolean;
-}
 
 interface Props {
   open: boolean;
@@ -37,7 +32,7 @@ export function PrereqDialog({ open, onOpenChange, onReady }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const status = await invoke<PrereqStatus>("prereq_check");
+        const status = await trpc.prereqs.check.query();
         if (cancelled) return;
         if (status.node && status.instatunnel) {
           onReady();
@@ -62,8 +57,12 @@ export function PrereqDialog({ open, onOpenChange, onReady }: Props) {
   const handleInstall = async () => {
     try {
       setStep("installing");
-      if (needNode) await invoke("node_install");
-      if (needInstatunnel) await invoke("tunnel_install");
+      if (needNode) {
+        await trpc.prereqs.installNode.mutate();
+      }
+      if (needInstatunnel) {
+        await trpc.prereqs.installTunnel.mutate();
+      }
       onReady();
     } catch (e) {
       setError(String(e));

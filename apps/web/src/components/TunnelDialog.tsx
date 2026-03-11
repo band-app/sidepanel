@@ -51,11 +51,6 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
         return;
       }
 
-      // If tunnel is broken (subdomain configured but not healthy), stop it first
-      if (settings.tunnelSubdomain && !health.tunnel) {
-        await trpc.tunnel.stop.mutate().catch(() => {});
-      }
-
       if (settings.tunnelSubdomain) {
         const { authenticated } = await trpc.tunnel.authCheck.query();
         if (!authenticated) {

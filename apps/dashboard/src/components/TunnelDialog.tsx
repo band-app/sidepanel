@@ -1,17 +1,9 @@
-import { useSettingsQuery } from "@band/dashboard-core";
+import { subscribeSSE, useSettingsQuery } from "@band/dashboard-core";
 import { Button, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@band/ui";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useState } from "react";
-
-interface ServiceHealth {
-  webserver: boolean;
-  tunnel: boolean;
-  tunnel_url: string | null;
-  tunnel_remote_host: string | null;
-}
+import { trpc } from "../lib/trpc-client";
 
 type TunnelStep =
   | "starting"
@@ -37,26 +29,11 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
   const [remoteHost, setRemoteHost] = useState<string | null>(null);
   const { settings } = useSettingsQuery();
 
-  const ensureWebServer = useCallback(async () => {
-    const health = await invoke<ServiceHealth>("service_health_check");
-    if (!health.webserver) {
-      await invoke("webserver_start");
-      // Wait for server to be ready by polling health
-      const deadline = Date.now() + 10_000;
-      while (Date.now() < deadline) {
-        const h = await invoke<ServiceHealth>("service_health_check");
-        if (h.webserver) break;
-        await new Promise((r) => setTimeout(r, 200));
-      }
-      await invoke<string>("webserver_get_token");
-    }
-    return health;
-  }, []);
-
   const startConnection = useCallback(async () => {
     try {
       setStep("starting");
-      const health = await ensureWebServer();
+
+      const health = await trpc.services.health.query();
 
       // If tunnel is already running on a different host, show message
       if (health.tunnel && health.tunnel_remote_host) {
@@ -65,26 +42,46 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
         return;
       }
 
-      // If tunnel is broken (subdomain configured but not healthy), kill it first
-      if (settings.tunnelSubdomain && !health.tunnel) {
-        await invoke("tunnel_stop").catch(() => {});
+      // If tunnel is already healthy (same machine), go straight to ready
+      if (health.tunnel && health.tunnel_url) {
+        setTunnelUrl(health.tunnel_url);
+        setStep("ready");
+        onTunnelUrl?.(health.tunnel_url);
+        return;
       }
 
       if (settings.tunnelSubdomain) {
-        const authed = await invoke<boolean>("tunnel_auth_check");
-        if (!authed) {
+        const { authenticated } = await trpc.tunnel.authCheck.query();
+        if (!authenticated) {
           setStep("auth_required");
           return;
         }
       }
 
       setStep("connecting");
-      await invoke("tunnel_start");
+      const result = await trpc.tunnel.start.mutate({});
+      if (result.url) {
+        setTunnelUrl(result.url);
+        setStep("ready");
+        onTunnelUrl?.(result.url);
+      } else {
+        // No URL returned — SSE events (subdomain-taken, error) may have already
+        // updated the step. If we're still on "connecting", show an error.
+        setTimeout(() => {
+          setStep((current) => {
+            if (current === "connecting") {
+              setError("Tunnel started but no URL was returned. Check server logs.");
+              return "error";
+            }
+            return current;
+          });
+        }, 2000);
+      }
     } catch (e) {
       setError(String(e));
       setStep("error");
     }
-  }, [settings.tunnelSubdomain, ensureWebServer]);
+  }, [settings.tunnelSubdomain, onTunnelUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -102,84 +99,73 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
     }
 
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
-    let unlistenError: (() => void) | undefined;
-    let unlistenSubdomainTaken: (() => void) | undefined;
-    let unlistenRemoteHost: (() => void) | undefined;
 
-    (async () => {
-      unlisten = await listen<string>("tunnel-url", (event) => {
-        if (!cancelled) {
-          setTunnelUrl(event.payload);
-          setStep("ready");
-          onTunnelUrl?.(event.payload);
-        }
-      });
-
-      unlistenError = await listen<string>("tunnel-error", (event) => {
-        if (!cancelled) {
-          setError(event.payload);
-          setStep("error");
-        }
-      });
-
-      unlistenSubdomainTaken = await listen("tunnel-subdomain-taken", () => {
-        if (!cancelled) {
-          setStep("subdomain_taken");
-        }
-      });
-
-      unlistenRemoteHost = await listen<string>("tunnel-remote-host", (event) => {
-        if (!cancelled) {
-          setRemoteHost(event.payload);
-          setStep("remote_host");
-        }
-      });
-
-      if (initialUrl) return;
-
-      // Check if services are already running
-      try {
-        const health = await invoke<ServiceHealth>("service_health_check");
-        if (health.tunnel && health.tunnel_url && !cancelled) {
-          const token = await invoke<string>("webserver_get_token").catch(() => null);
-          const url = token ? `${health.tunnel_url}?token=${token}` : health.tunnel_url;
-          if (health.tunnel_remote_host) {
-            setRemoteHost(health.tunnel_remote_host);
-            setStep("remote_host");
-          } else {
-            setTunnelUrl(url);
-            setStep("ready");
-            onTunnelUrl?.(url);
-          }
-          return;
-        }
-      } catch {}
-
-      if (!cancelled) {
-        await startConnection();
+    // Subscribe to SSE tunnel events
+    const unsubscribe = subscribeSSE((event) => {
+      if (cancelled) return;
+      if (event.kind === "tunnel-url" && event.url) {
+        setTunnelUrl(event.url);
+        setStep("ready");
+        onTunnelUrl?.(event.url);
+      } else if (event.kind === "tunnel-error" && event.error) {
+        setError(event.error);
+        setStep("error");
+      } else if (event.kind === "tunnel-subdomain-taken") {
+        setStep("subdomain_taken");
+      } else if (event.kind === "tunnel-remote-host" && event.host) {
+        setRemoteHost(event.host);
+        setStep("remote_host");
       }
-    })();
+    });
+
+    if (!initialUrl) {
+      (async () => {
+        try {
+          const health = await trpc.services.health.query();
+          if (cancelled) return;
+
+          if (health.tunnel && health.tunnel_url) {
+            if (health.tunnel_remote_host) {
+              setRemoteHost(health.tunnel_remote_host);
+              setStep("remote_host");
+            } else {
+              setTunnelUrl(health.tunnel_url);
+              setStep("ready");
+              onTunnelUrl?.(health.tunnel_url);
+            }
+            return;
+          }
+        } catch {
+          // continue to startConnection
+        }
+
+        if (!cancelled) {
+          await startConnection();
+        }
+      })();
+    }
 
     return () => {
       cancelled = true;
-      unlisten?.();
-      unlistenError?.();
-      unlistenSubdomainTaken?.();
-      unlistenRemoteHost?.();
+      unsubscribe();
     };
   }, [open, startConnection, initialUrl, onTunnelUrl]);
 
   const handleRetryAuth = async () => {
     try {
       setStep("starting");
-      const authed = await invoke<boolean>("tunnel_auth_check");
-      if (!authed) {
+      const { authenticated } = await trpc.tunnel.authCheck.query();
+      if (!authenticated) {
         setStep("auth_required");
         return;
       }
       setStep("connecting");
-      await invoke("tunnel_start");
+      const result = await trpc.tunnel.start.mutate({});
+      if (result.url) {
+        setTunnelUrl(result.url);
+        setStep("ready");
+        onTunnelUrl?.(result.url);
+      }
     } catch (e) {
       setError(String(e));
       setStep("error");
@@ -189,7 +175,12 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
   const handleContinueRandom = async () => {
     try {
       setStep("connecting");
-      await invoke("tunnel_start", { skipSubdomain: true });
+      const result = await trpc.tunnel.start.mutate({ skipSubdomain: true });
+      if (result.url) {
+        setTunnelUrl(result.url);
+        setStep("ready");
+        onTunnelUrl?.(result.url);
+      }
     } catch (e) {
       setError(String(e));
       setStep("error");
@@ -197,8 +188,7 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
   };
 
   const handleStop = async () => {
-    await invoke("tunnel_stop").catch(() => {});
-    await invoke("webserver_stop").catch(() => {});
+    await trpc.tunnel.stop.mutate().catch(() => {});
     onStopped();
     onOpenChange(false);
   };
@@ -215,7 +205,7 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
             <>
               <Loader2 className="size-8 animate-spin text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
-                {step === "starting" ? "Starting web server..." : "Creating tunnel..."}
+                {step === "starting" ? "Checking services..." : "Creating tunnel..."}
               </p>
             </>
           )}
@@ -301,7 +291,7 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
         {step === "ready" && (
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={handleStop}>
-              Stop Server
+              Stop Tunnel
             </Button>
           </DialogFooter>
         )}

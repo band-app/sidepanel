@@ -1,12 +1,7 @@
-import { isServiceHealthy, type ServiceHealth, useSettingsQuery } from "@band/dashboard-core";
+import { isServiceHealthy, subscribeSSE, useSettingsQuery } from "@band/dashboard-core";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
-
-interface PrereqStatus {
-  node: boolean;
-  instatunnel: boolean;
-}
+import { trpc } from "../lib/trpc-client";
 
 const HEALTH_POLL_INTERVAL = 300_000;
 
@@ -20,12 +15,12 @@ export function useTunnel() {
   const isRecoveringRef = useRef(false);
   const { settings } = useSettingsQuery();
 
-  // Health polling — check service status every 30s, recover if shouldBeRunning
+  // Health polling — check service status, recover if shouldBeRunning
   useEffect(() => {
     let intervalId: ReturnType<typeof setInterval> | undefined;
     let cancelled = false;
 
-    const recover = async (health: ServiceHealth) => {
+    const recover = async (health: { webserver: boolean; tunnel: boolean }) => {
       if (isRecoveringRef.current) return;
       isRecoveringRef.current = true;
       try {
@@ -34,16 +29,22 @@ export function useTunnel() {
           const deadline = Date.now() + 10_000;
           while (Date.now() < deadline) {
             if (cancelled) return;
-            const h = await invoke<ServiceHealth>("service_health_check");
-            if (h.webserver) break;
+            try {
+              const h = await trpc.services.health.query();
+              if (h.webserver) break;
+            } catch {
+              // web server not ready yet
+            }
             await new Promise((r) => setTimeout(r, 200));
           }
         }
         if (cancelled) return;
-        await invoke<string>("webserver_get_token");
-        if (cancelled) return;
         if (!health.tunnel) {
-          await invoke("tunnel_start");
+          const result = await trpc.tunnel.start.mutate({});
+          if (result.url) {
+            setTunnelUrl(result.url);
+            setWebServerRunning(true);
+          }
         }
       } catch {
         // swallow — next poll tick will retry
@@ -54,7 +55,7 @@ export function useTunnel() {
 
     const poll = async () => {
       try {
-        const health = await invoke<ServiceHealth>("service_health_check");
+        const health = await trpc.services.health.query();
         if (cancelled) return;
         setWebServerRunning(isServiceHealthy(health, settings.tunnelSubdomain));
         if (health.tunnel && health.tunnel_url) {
@@ -62,13 +63,16 @@ export function useTunnel() {
         } else if (!health.tunnel) {
           setTunnelUrl(null);
         }
-        setTunnelRemoteHost(health.tunnel_remote_host);
+        setTunnelRemoteHost(health.tunnel_remote_host ?? null);
 
         if (shouldBeRunningRef.current && (!health.webserver || !health.tunnel)) {
           recover(health);
         }
       } catch {
-        // ignore errors during polling
+        // tRPC failed — web server is down
+        if (shouldBeRunningRef.current) {
+          recover({ webserver: false, tunnel: false });
+        }
       }
     };
 
@@ -81,46 +85,20 @@ export function useTunnel() {
     };
   }, [settings.tunnelSubdomain]);
 
-  // Persistent tunnel-url listener (works even when dialog is closed)
+  // Persistent SSE listener for tunnel events (works even when dialog is closed)
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen<string>("tunnel-url", (event) => {
-      shouldBeRunningRef.current = true;
-      setTunnelUrl(event.payload);
-      setWebServerRunning(true);
-    }).then((fn) => {
-      unlisten = fn;
+    return subscribeSSE((event) => {
+      if (event.kind === "tunnel-url" && event.url) {
+        shouldBeRunningRef.current = true;
+        setTunnelUrl(event.url);
+        setWebServerRunning(true);
+      } else if (event.kind === "tunnel-remote-host" && event.host) {
+        setTunnelRemoteHost(event.host);
+      } else if (event.kind === "tunnel-subdomain-taken") {
+        shouldBeRunningRef.current = false;
+        setShowDialog(true);
+      }
     });
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
-  // Listen for tunnel-remote-host events
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen<string>("tunnel-remote-host", (event) => {
-      setTunnelRemoteHost(event.payload);
-    }).then((fn) => {
-      unlisten = fn;
-    });
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
-  // Open dialog when subdomain is taken so user can choose fallback
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen("tunnel-subdomain-taken", () => {
-      shouldBeRunningRef.current = false;
-      setShowDialog(true);
-    }).then((fn) => {
-      unlisten = fn;
-    });
-    return () => {
-      unlisten?.();
-    };
   }, []);
 
   // Auto-start on app launch if enabled
@@ -130,8 +108,9 @@ export function useTunnel() {
     let cancelled = false;
     (async () => {
       try {
-        const status = await invoke<PrereqStatus>("prereq_check");
-        if (!status.node || !status.instatunnel || cancelled) return;
+        const status = await trpc.prereqs.check.query();
+        if (cancelled) return;
+        if (!status.node || !status.instatunnel) return;
         shouldBeRunningRef.current = true;
       } catch {
         // ignore — health poll will retry
@@ -147,14 +126,14 @@ export function useTunnel() {
   const openDialog = useCallback(async () => {
     shouldBeRunningRef.current = true;
     try {
-      const health = await invoke<ServiceHealth>("service_health_check");
+      const health = await trpc.services.health.query();
       setWebServerRunning(isServiceHealthy(health, settings.tunnelSubdomain));
       if (health.tunnel && health.tunnel_url) {
         setTunnelUrl((prev) => prev ?? health.tunnel_url);
       } else if (!health.tunnel) {
         setTunnelUrl(null);
       }
-      setTunnelRemoteHost(health.tunnel_remote_host);
+      setTunnelRemoteHost(health.tunnel_remote_host ?? null);
     } catch {
       // continue to dialog even if check fails
     }

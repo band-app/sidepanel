@@ -1,4 +1,5 @@
 import type { PlatformCapabilities, Unsubscribe } from "../adapter";
+import { toWorkspaceId } from "../lib/workspace-id";
 import { WebCapabilities, WebDashboardAdapter } from "./web";
 
 function isTauri(): boolean {
@@ -23,7 +24,7 @@ async function tauriListen<T>(event: string, handler: (payload: T) => void): Pro
 export class HybridDashboardAdapter extends WebDashboardAdapter {
   async removeWorkspace(project: string, branch: string): Promise<void> {
     if (isTauri()) {
-      const workspaceId = `${project}-${branch}`;
+      const workspaceId = toWorkspaceId(project, branch);
       await tauriInvoke("workspace_close", { workspaceId });
     }
     return super.removeWorkspace(project, branch);

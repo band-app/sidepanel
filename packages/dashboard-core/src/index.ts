@@ -37,6 +37,7 @@ export {
   useStatusWatcher,
 } from "./hooks/use-status";
 export { isServiceHealthy, type ServiceHealth } from "./lib/service-health";
+export { toWorkspaceId } from "./lib/workspace-id";
 // Lib
 export { playSound, SOUNDS, type SoundId } from "./lib/sounds";
 export type { SSEEvent } from "./lib/sse";

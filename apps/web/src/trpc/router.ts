@@ -10,6 +10,7 @@ import {
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { basename, extname, join, resolve } from "node:path";
+import { toWorkspaceId } from "@band/dashboard-core";
 import { createLogger } from "@band/logger";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -90,7 +91,7 @@ const projectsRouter = t.router({
           defaultBranch: project.defaultBranch,
           label: project.label,
           worktrees: worktrees.map((wt) => {
-            const workspaceId = `${project.name}-${wt.branch}`;
+            const workspaceId = toWorkspaceId(project.name, wt.branch);
             const status = statusMap.get(workspaceId);
             return {
               ...wt,
@@ -258,7 +259,7 @@ const workspacesRouter = t.router({
       }
 
       if (input.prompt) {
-        const workspaceId = `${input.project}-${input.branch}`;
+        const workspaceId = toWorkspaceId(input.project, input.branch);
         submitTask(workspaceId, input.prompt);
       }
 
@@ -334,7 +335,7 @@ const workspacesRouter = t.router({
             proj.worktrees = proj.worktrees.filter((wt) => wt.branch !== input.branch);
             saveState(state);
 
-            const workspaceId = `${input.project}-${input.branch}`;
+            const workspaceId = toWorkspaceId(input.project, input.branch);
             try {
               unlinkSync(join(bandHome(), "workspace-prompts", `${workspaceId}.json`));
             } catch {
@@ -1089,7 +1090,7 @@ const statusesRouter = t.router({
     for (const proj of state.projects) {
       for (const wt of proj.worktrees) {
         if (input.cwd === wt.path || input.cwd.startsWith(`${wt.path}/`)) {
-          return { workspaceId: `${proj.name}-${wt.branch}` };
+          return { workspaceId: toWorkspaceId(proj.name, wt.branch) };
         }
       }
     }

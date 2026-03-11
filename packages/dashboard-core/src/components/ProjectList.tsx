@@ -49,6 +49,7 @@ import {
   useUpdateProjectLabel,
 } from "../hooks/use-project-mutations";
 import { useProjects } from "../hooks/use-projects";
+import { toWorkspaceId } from "../lib/workspace-id";
 import { useSettingsQuery } from "../hooks/use-settings-query";
 import { useDashboardStore } from "../stores/index";
 import type {
@@ -202,7 +203,7 @@ function SortableProject({
           <p className="text-sm text-muted-foreground px-4 py-2">No workspaces yet</p>
         ) : (
           project.worktrees.map((wt) => {
-            const wsId = `${project.name}-${wt.branch}`;
+            const wsId = toWorkspaceId(project.name, wt.branch);
             const currentIndex = workspaceIndex++;
             return (
               <WorkspaceCard
@@ -314,7 +315,7 @@ export function ProjectList({ labelFilter, editMode }: ProjectListProps) {
   const allWorkspaceIds = useMemo(
     () =>
       visibleGroups.flatMap((g) =>
-        g.projects.flatMap((p) => p.worktrees.map((wt) => `${p.name}-${wt.branch}`)),
+        g.projects.flatMap((p) => p.worktrees.map((wt) => toWorkspaceId(p.name, wt.branch))),
       ),
     [visibleGroups],
   );

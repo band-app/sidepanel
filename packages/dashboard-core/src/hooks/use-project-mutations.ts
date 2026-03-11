@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAdapter } from "../context";
 import { queryKeys } from "../query-client";
+import { toWorkspaceId } from "../lib/workspace-id";
 import { useDashboardStore } from "../stores/index";
 import type { ProjectInfo } from "../types";
 
@@ -104,7 +105,7 @@ export function useCreateWorkspace() {
     }) => adapter.createWorkspace(project, branch, base, prompt),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects });
-      const workspaceId = `${vars.project}-${vars.branch}`;
+      const workspaceId = toWorkspaceId(vars.project, vars.branch);
       openWorkspace(workspaceId);
     },
     onError: (err) => {

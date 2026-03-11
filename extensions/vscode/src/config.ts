@@ -128,7 +128,7 @@ export async function getBandWorktreeIdentity(
               return {
                 project: project.name,
                 branch: wt.branch,
-                workspaceId: `${project.name}-${wt.branch}`,
+                workspaceId: `${project.name}-${wt.branch.replaceAll("/", "-")}`,
               };
             }
           }

@@ -3,6 +3,7 @@ import { Clipboard, FolderOpen, GitBranch, Play, Square, Trash2 } from "lucide-r
 import { useEffect, useRef } from "react";
 import { useCapabilities } from "../context";
 import { useRemoveWorkspace } from "../hooks/use-project-mutations";
+import { toWorkspaceId } from "../lib/workspace-id";
 import { useDashboardStore } from "../stores/index";
 import type {
   DeleteDialogInfo,
@@ -49,7 +50,7 @@ export function WorkspaceCard({
   const activeWorkspaceId = useDashboardStore((s) => s.activeWorkspaceId);
   const removeWorkspaceMutation = useRemoveWorkspace();
 
-  const workspaceId = `${projectName}-${worktree.branch}`;
+  const workspaceId = toWorkspaceId(projectName, worktree.branch);
   const isActive = activeWorkspaceId === workspaceId;
   const href = capabilities.getWorkspaceHref?.(workspaceId);
 

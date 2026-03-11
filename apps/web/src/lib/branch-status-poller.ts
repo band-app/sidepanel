@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { toWorkspaceId } from "@band/dashboard-core";
 import { execGh, execGit } from "./git";
 import { bandHome, loadState } from "./state";
 import { syncWorktrees } from "./sync-state";
@@ -41,7 +42,7 @@ function getWorkspaces(): WorkspaceInfo[] {
   for (const project of state.projects) {
     for (const wt of project.worktrees) {
       workspaces.push({
-        workspaceId: `${project.name}-${wt.branch}`,
+        workspaceId: toWorkspaceId(project.name, wt.branch),
         project: project.name,
         branch: wt.branch,
         worktreePath: wt.path,

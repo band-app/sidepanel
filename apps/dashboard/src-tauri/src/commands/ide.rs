@@ -5,7 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 use std::io::Write;
 
@@ -455,6 +455,7 @@ pub fn start_focus_polling(app_handle: tauri::AppHandle) {
                 if last_active.as_deref() != Some(ws_id.as_str()) {
                     last_active = Some(ws_id.clone());
                     set_active_workspace(&active_state, &ws_id);
+                    let _ = app_handle.emit("active-workspace", ws_id.clone());
                 }
                 if !dashboard_raised {
                     let _ = app_handle.run_on_main_thread(|| unsafe {

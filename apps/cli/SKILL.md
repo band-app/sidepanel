@@ -75,7 +75,24 @@ band workspaces create <project> <branch> [--base <branch>] [--prompt <text>]
 
 Returns the worktree path. Idempotent — creating an existing workspace returns its path. Runs `.band/config.json` `setup` script if present (non-fatal).
 
-**Always use `--prompt` when the user wants work to begin immediately.** This submits a task to the coding agent right after workspace creation, so the agent starts working without a separate step. Only omit `--prompt` when the workspace is being created for manual/later use.
+**Always use `--prompt` when the user wants work to begin immediately.** This submits a task to the coding agent right after workspace creation, so the agent starts working without a separate step. Only omit `--prompt` when the user explicitly wants to create the workspace for manual/later use.
+
+When to use `--prompt` (most cases):
+```sh
+# User says "create a workspace and implement X" or "start working on X"
+band workspaces create my-app feat/auth --prompt "Implement GitHub issue #42: Add JWT authentication"
+
+# User says "create a workspace for issue #99 and start implementing"
+band workspaces create my-app fix/bug-99 --prompt "Fix issue #99: login redirect loop. See https://github.com/org/repo/issues/99"
+```
+
+When to omit `--prompt` (rare — user explicitly wants no task):
+```sh
+# User says "just create a workspace, I'll work on it myself"
+band workspaces create my-app feat/experiment
+```
+
+**Do NOT create a workspace without `--prompt` and then separately run `band tasks create`.** That is two steps for what `--prompt` does in one.
 
 ### Remove a workspace
 

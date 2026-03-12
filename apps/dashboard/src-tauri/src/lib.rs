@@ -15,7 +15,13 @@ const DASHBOARD_WIDTH: u32 = 400;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    // Shared flags accessible from both setup() and the run-event callback
+    let health_stop = Arc::new(AtomicBool::new(false));
+    let health_stop_setup = health_stop.clone();
+    let cleaned_up = Arc::new(AtomicBool::new(false));
+    let cleaned_up_setup = cleaned_up.clone();
+
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -33,11 +39,12 @@ pub fn run() {
             commands::webserver::webserver_stop,
             commands::window::open_tasks_window,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();
 
             // Flag to stop the health monitor when the app closes
-            let health_stop = Arc::new(AtomicBool::new(false));
+            let health_stop = health_stop_setup;
+            let cleaned_up = cleaned_up_setup;
 
             // Auto-start the web server in release builds.
             // In dev mode, `beforeDevCommand` already starts the Vite dev server.
@@ -137,23 +144,27 @@ pub fn run() {
             // (handles projects without the Band VS Code extension)
             commands::ide::start_focus_polling(app.handle().clone());
 
-            // Kill web server and close secondary windows on app exit
+            // Kill web server and close secondary windows on app exit.
+            // Uses a `cleaned_up` flag to avoid double cleanup when both
+            // CloseRequested (close button) and ExitRequested (Cmd+Q) fire.
             let web_proc = app.state::<WebServerState>().inner().0.clone();
             let app_handle_for_close = app.handle().clone();
             let health_stop_close = health_stop;
+            let cleaned_up_close = cleaned_up;
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    // Stop the health monitor first so it doesn't try to
-                    // restart the server after we kill it.
+                    if cleaned_up_close
+                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_err()
+                    {
+                        return;
+                    }
                     health_stop_close.store(true, Ordering::Relaxed);
 
-                    // Close the tasks window so the app can exit fully
                     if let Some(tasks_win) = app_handle_for_close.get_webview_window("tasks") {
                         let _ = tasks_win.destroy();
                     }
                     web_proc.kill();
-                    // Kill any server on the port (handles the detached process
-                    // spawned by ensure_webserver_running in release builds)
                     webserver::kill_port_sync(webserver::get_configured_port());
                 }
             });
@@ -176,6 +187,25 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+
+    app.run(move |app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { .. } = event {
+            if cleaned_up
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+                .is_err()
+            {
+                return;
+            }
+            health_stop.store(true, Ordering::Relaxed);
+
+            let web_proc = &app_handle.state::<WebServerState>().0;
+            if let Some(tasks_win) = app_handle.get_webview_window("tasks") {
+                let _ = tasks_win.destroy();
+            }
+            web_proc.kill();
+            webserver::kill_port_sync(webserver::get_configured_port());
+        }
+    });
 }

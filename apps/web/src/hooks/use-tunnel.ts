@@ -1,10 +1,11 @@
-import { isServiceHealthy } from "@band/dashboard-core";
+import { isServiceHealthy, useAdapter } from "@band/dashboard-core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { trpc } from "../lib/trpc-client";
 
 const HEALTH_POLL_INTERVAL = 30_000;
 
 export function useTunnel() {
+  const adapter = useAdapter();
   const [webServerRunning, setWebServerRunning] = useState(false);
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
   const [tunnelError, setTunnelError] = useState<string | null>(null);
@@ -47,25 +48,23 @@ export function useTunnel() {
     };
   }, []);
 
-  // Persistent tRPC subscription listener for tunnel events (works even when dialog is closed)
+  // Persistent listener for tunnel events via the adapter's shared SSE connection
+  // (avoids opening a separate EventSource that would consume an HTTP/1.1 slot)
   useEffect(() => {
-    const subscription = trpc.status.stream.subscribe(undefined, {
-      onData: (event: { kind: string; url?: string; error?: string }) => {
-        if (event.kind === "tunnel-url" && event.url) {
-          hadTunnelRef.current = true;
-          setTunnelUrl(event.url);
-          setTunnelError(null);
-          setWebServerRunning(true);
-        } else if (event.kind === "tunnel-error" && event.error) {
-          hadTunnelRef.current = false;
-          setTunnelUrl(null);
-          setTunnelError(event.error);
-          setWebServerRunning(false);
-        }
-      },
+    return adapter.subscribeStatusEvents((event) => {
+      if (event.kind === "tunnel-url" && typeof event.url === "string") {
+        hadTunnelRef.current = true;
+        setTunnelUrl(event.url);
+        setTunnelError(null);
+        setWebServerRunning(true);
+      } else if (event.kind === "tunnel-error" && typeof event.error === "string") {
+        hadTunnelRef.current = false;
+        setTunnelUrl(null);
+        setTunnelError(event.error);
+        setWebServerRunning(false);
+      }
     });
-    return () => subscription.unsubscribe();
-  }, []);
+  }, [adapter]);
 
   // Globe click → fresh health check, update state, then open prereq dialog
   const openDialog = useCallback(async () => {

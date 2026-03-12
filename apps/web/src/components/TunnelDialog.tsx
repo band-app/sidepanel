@@ -1,3 +1,4 @@
+import { useAdapter } from "@band/dashboard-core";
 import { Button, Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@band/ui";
 import { Loader2 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunnelUrl }: Props) {
+  const adapter = useAdapter();
   const [step, setStep] = useState<TunnelStep>("starting");
   const [tunnelUrl, setTunnelUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -41,19 +43,17 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
 
     let cancelled = false;
 
-    // Subscribe to tRPC status stream for tunnel events
-    const subscription = trpc.status.stream.subscribe(undefined, {
-      onData: (event: { kind: string; url?: string; error?: string }) => {
-        if (cancelled) return;
-        if (event.kind === "tunnel-url" && event.url) {
-          setTunnelUrl(event.url);
-          setStep("ready");
-          onTunnelUrlRef.current?.(event.url);
-        } else if (event.kind === "tunnel-error" && event.error) {
-          setError(event.error);
-          setStep("error");
-        }
-      },
+    // Subscribe via the adapter's shared SSE connection for tunnel events
+    const unsubscribe = adapter.subscribeStatusEvents((event) => {
+      if (cancelled) return;
+      if (event.kind === "tunnel-url" && typeof event.url === "string") {
+        setTunnelUrl(event.url);
+        setStep("ready");
+        onTunnelUrlRef.current?.(event.url);
+      } else if (event.kind === "tunnel-error" && typeof event.error === "string") {
+        setError(event.error);
+        setStep("error");
+      }
     });
 
     // Check if services are already running, otherwise start tunnel
@@ -91,9 +91,9 @@ export function TunnelDialog({ open, onOpenChange, onStopped, initialUrl, onTunn
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      unsubscribe();
     };
-  }, [open]);
+  }, [open, adapter]);
 
   const handleRetry = async () => {
     try {

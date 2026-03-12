@@ -44,6 +44,9 @@ export interface DashboardAdapter {
     onCI: (workspaceId: string, ci: CIStatus) => void,
   ): Unsubscribe;
 
+  /** Subscribe to raw status stream events (shared SSE connection). */
+  subscribeStatusEvents(handler: (event: Record<string, unknown>) => void): Unsubscribe;
+
   // Hooks
   checkHooks(): Promise<HooksStatus>;
   installHooks(): Promise<void>;

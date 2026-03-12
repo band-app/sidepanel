@@ -103,6 +103,10 @@ export class WebDashboardAdapter implements DashboardAdapter {
     };
   }
 
+  subscribeStatusEvents(handler: (event: Record<string, unknown>) => void): Unsubscribe {
+    return this.subscribeStatusStream(handler);
+  }
+
   subscribeAgentStatus(
     onUpdate: (status: WorkspaceStatus) => void,
     onRemove: (workspaceId: string) => void,

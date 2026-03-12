@@ -7,7 +7,7 @@ import {
 import { WebCapabilities, WebDashboardAdapter } from "@band/dashboard-core/adapters/web";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Clock } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChatView } from "../components/ChatView";
 import { CodeBrowserView } from "../components/CodeBrowserView";
 import { trpc } from "../lib/trpc-client";
@@ -23,6 +23,17 @@ function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+function useAppHeight() {
+  const [height, setHeight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const update = () => setHeight(window.innerHeight);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
+  return height;
+}
+
 function ChatPage() {
   const { workspaceId } = Route.useParams();
   const decoded = decodeURIComponent(workspaceId);
@@ -32,6 +43,7 @@ function ChatPage() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("chat");
   const isTasksWindow = useRef<boolean | null>(null);
   const navigate = useNavigate();
+  const appHeight = useAppHeight();
 
   useEffect(() => {
     if (!isTauri()) {
@@ -76,7 +88,10 @@ function ChatPage() {
   }, []);
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden">
+    <div
+      className="flex flex-col overflow-hidden"
+      style={{ height: appHeight ? `${appHeight}px` : "100dvh" }}
+    >
       <header className="flex shrink-0 items-center gap-3 border-b border-border/50 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <button
           type="button"
@@ -99,8 +114,8 @@ function ChatPage() {
         )}
       </header>
       <WorkspaceTabNav activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="min-h-0 flex-1">
-        <div className={activeTab === "chat" ? "flex h-full flex-col" : "hidden"}>
+      <main className="flex min-h-0 flex-1 flex-col">
+        <div className={activeTab === "chat" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <ChatView
             workspaceId={decoded}
             workspaceName={decoded}
@@ -111,10 +126,10 @@ function ChatPage() {
           />
         </div>
         <DashboardProvider adapter={adapter} capabilities={capabilities}>
-          <div className={activeTab === "diff" ? "h-full" : "hidden"}>
+          <div className={activeTab === "diff" ? "min-h-0 flex-1" : "hidden"}>
             <DiffView workspaceId={decoded} />
           </div>
-          <div className={activeTab === "code" ? "h-full" : "hidden"}>
+          <div className={activeTab === "code" ? "min-h-0 flex-1" : "hidden"}>
             <CodeBrowserView workspaceId={decoded} />
           </div>
         </DashboardProvider>

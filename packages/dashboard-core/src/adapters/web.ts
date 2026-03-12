@@ -78,11 +78,29 @@ export class WebDashboardAdapter implements DashboardAdapter {
     await this.trpc.settings.update.mutate(settings as unknown as Record<string, unknown>);
   }
 
+  private statusHandlers = new Set<(data: SSEEvent) => void>();
+  private statusSubscription: { unsubscribe: () => void } | null = null;
+
   private subscribeStatusStream(handler: (data: SSEEvent) => void): Unsubscribe {
-    const subscription = this.trpc.status.stream.subscribe(undefined, {
-      onData: (data: SSEEvent) => handler(data),
-    });
-    return () => subscription.unsubscribe();
+    this.statusHandlers.add(handler);
+
+    if (!this.statusSubscription) {
+      this.statusSubscription = this.trpc.status.stream.subscribe(undefined, {
+        onData: (data: SSEEvent) => {
+          for (const h of this.statusHandlers) {
+            h(data);
+          }
+        },
+      });
+    }
+
+    return () => {
+      this.statusHandlers.delete(handler);
+      if (this.statusHandlers.size === 0 && this.statusSubscription) {
+        this.statusSubscription.unsubscribe();
+        this.statusSubscription = null;
+      }
+    };
   }
 
   subscribeAgentStatus(

@@ -98,7 +98,7 @@ export function ChatView({
   onShowSessionListChange,
 }: ChatViewProps) {
   const sessionIdRef = useRef<string | undefined>(undefined);
-  const reconnectedPromptRef = useRef<string | undefined>(undefined);
+  const [reconnectedPrompt, setReconnectedPrompt] = useState<string | undefined>(undefined);
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined);
   const [historicalMessages, setHistoricalMessages] = useState<HistoryMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -139,7 +139,7 @@ export function ChatView({
         typeof dataPart.data === "object" &&
         "text" in (dataPart.data as Record<string, unknown>)
       ) {
-        reconnectedPromptRef.current = (dataPart.data as { text: string }).text;
+        setReconnectedPrompt((dataPart.data as { text: string }).text);
       }
     },
   });
@@ -176,7 +176,7 @@ export function ChatView({
   const handleSelectSession = useCallback(
     async (sessionId: string) => {
       sessionIdRef.current = sessionId;
-      reconnectedPromptRef.current = undefined;
+      setReconnectedPrompt(undefined);
       setActiveSessionId(sessionId);
       setMessages([]);
       setHistoricalMessages([]);
@@ -188,7 +188,7 @@ export function ChatView({
 
   const handleNewSession = useCallback(() => {
     sessionIdRef.current = undefined;
-    reconnectedPromptRef.current = undefined;
+    setReconnectedPrompt(undefined);
     setActiveSessionId(undefined);
     setHistoricalMessages([]);
     setMessages([]);
@@ -226,6 +226,37 @@ export function ChatView({
     return map;
   }, [messages]);
 
+  // When reconnecting to a stream, the buffered chunks replay the current
+  // task's content which overlaps with the tail of the session history.
+  // Strip the overlapping turn from history so each message appears once.
+  const filteredHistoricalMessages = useMemo(() => {
+    if (!reconnectedPrompt || historicalMessages.length === 0) {
+      return historicalMessages;
+    }
+    const promptText = reconnectedPrompt.trim();
+    for (let i = historicalMessages.length - 1; i >= 0; i--) {
+      if (historicalMessages[i].role === "user") {
+        const text = historicalMessages[i].content
+          .filter((b) => b.type === "text")
+          .map((b) => b.text)
+          .join("\n")
+          .trim();
+        if (text === promptText) {
+          return historicalMessages.slice(0, i);
+        }
+        break;
+      }
+    }
+    return historicalMessages;
+  }, [historicalMessages, reconnectedPrompt]);
+
+  const hasHistory = filteredHistoricalMessages.length > 0;
+  const hasLiveMessages = messages.length > 0;
+  // Show the reconnected prompt as a user message when the stream is
+  // providing the current task (no user message in live stream).
+  const showReconnectedPrompt = reconnectedPrompt && !messages.some((m) => m.role === "user");
+  const isEmpty = !hasHistory && !hasLiveMessages && !showReconnectedPrompt;
+
   if (supportsSessionListing && showSessionList) {
     return (
       <SessionList
@@ -236,13 +267,6 @@ export function ChatView({
       />
     );
   }
-
-  const hasHistory = historicalMessages.length > 0;
-  const hasLiveMessages = messages.length > 0;
-  // Show reconnected prompt only when history doesn't already include it
-  const showReconnectedPrompt =
-    reconnectedPromptRef.current && !hasHistory && !messages.some((m) => m.role === "user");
-  const isEmpty = !hasHistory && !hasLiveMessages && !showReconnectedPrompt;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -262,9 +286,11 @@ export function ChatView({
             </div>
           )}
 
-          {historicalMessages.length > 0 && <HistoryMessages messages={historicalMessages} />}
+          {filteredHistoricalMessages.length > 0 && (
+            <HistoryMessages messages={filteredHistoricalMessages} />
+          )}
 
-          {hasHistory && hasLiveMessages && (
+          {hasHistory && (hasLiveMessages || showReconnectedPrompt) && (
             <div className="flex items-center gap-3 py-2">
               <div className="h-px flex-1 bg-border/50" />
               <span className="text-sm text-muted-foreground">new messages</span>
@@ -275,7 +301,7 @@ export function ChatView({
           {showReconnectedPrompt && (
             <Message from="user">
               <MessageContent>
-                <MessageResponse>{reconnectedPromptRef.current}</MessageResponse>
+                <MessageResponse>{reconnectedPrompt}</MessageResponse>
               </MessageContent>
             </Message>
           )}

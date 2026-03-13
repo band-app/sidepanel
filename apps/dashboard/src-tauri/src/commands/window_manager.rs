@@ -31,18 +31,18 @@ impl WindowManager {
 
     // --- Registry operations ---
 
-    pub fn get(&self, app_type: &str, folder_name: &str) -> Option<WindowEntry> {
+    pub fn get(&self, app_type: &str, workspace_id: &str) -> Option<WindowEntry> {
         self.registry
             .lock()
             .unwrap()
-            .get(&registry_key(app_type, folder_name))
+            .get(&registry_key(app_type, workspace_id))
             .cloned()
     }
 
-    pub fn register(&self, app_type: &str, folder_name: &str, pid: i32, cg_id: u32) {
+    pub fn register(&self, app_type: &str, workspace_id: &str, pid: i32, cg_id: u32) {
         let mut map = self.registry.lock().unwrap();
         map.insert(
-            registry_key(app_type, folder_name),
+            registry_key(app_type, workspace_id),
             WindowEntry {
                 pid,
                 cg_window_id: cg_id,
@@ -51,14 +51,14 @@ impl WindowManager {
         save_to_disk(&map);
     }
 
-    pub fn unregister(&self, app_type: &str, folder_name: &str) {
+    pub fn unregister(&self, app_type: &str, workspace_id: &str) {
         let mut map = self.registry.lock().unwrap();
-        map.remove(&registry_key(app_type, folder_name));
+        map.remove(&registry_key(app_type, workspace_id));
         save_to_disk(&map);
     }
 
-    pub fn is_valid(&self, app_type: &str, folder_name: &str, bundle_id: &str) -> bool {
-        let Some(entry) = self.get(app_type, folder_name) else {
+    pub fn is_valid(&self, app_type: &str, workspace_id: &str, bundle_id: &str) -> bool {
+        let Some(entry) = self.get(app_type, workspace_id) else {
             return false;
         };
         let windows = ax_windows::list_windows_for_bundle(bundle_id);
@@ -69,8 +69,8 @@ impl WindowManager {
         let map = self.registry.lock().unwrap();
         for (key, entry) in map.iter() {
             if entry.cg_window_id == cg_id {
-                if let Some((app_type, folder_name)) = key.split_once(':') {
-                    return Some((app_type.to_string(), folder_name.to_string()));
+                if let Some((app_type, workspace_id)) = key.split_once(':') {
+                    return Some((app_type.to_string(), workspace_id.to_string()));
                 }
             }
         }
@@ -83,6 +83,7 @@ impl WindowManager {
         &self,
         handler: &dyn AppHandler,
         worktree_path: &str,
+        workspace_id: &str,
         folder_name: &str,
         config: &serde_json::Value,
     ) -> Result<bool, String> {
@@ -90,18 +91,18 @@ impl WindowManager {
         let bundle_id = handler.bundle_id();
 
         // 1. Check registry for a known window
-        if let Some(entry) = self.get(app_type, folder_name) {
-            if self.is_valid(app_type, folder_name, bundle_id) {
+        if let Some(entry) = self.get(app_type, workspace_id) {
+            if self.is_valid(app_type, workspace_id, bundle_id) {
                 ax_windows::focus_window(entry.pid, entry.cg_window_id);
                 return Ok(false);
             }
-            self.unregister(app_type, folder_name);
+            self.unregister(app_type, workspace_id);
         }
 
         // 2. Try to find an existing window by title
         if let Some(hint) = handler.window_title_hint(folder_name) {
             if let Some(win) = ax_windows::find_window_by_title(bundle_id, &hint) {
-                self.register(app_type, folder_name, win.pid, win.cg_window_id);
+                self.register(app_type, workspace_id, win.pid, win.cg_window_id);
                 ax_windows::focus_window(win.pid, win.cg_window_id);
                 return Ok(false);
             }
@@ -115,7 +116,7 @@ impl WindowManager {
         handler.launch(worktree_path, folder_name, config)?;
 
         if let Some(win) = watcher.wait(5000) {
-            self.register(app_type, folder_name, win.pid, win.cg_window_id);
+            self.register(app_type, workspace_id, win.pid, win.cg_window_id);
         }
 
         Ok(true)
@@ -125,11 +126,11 @@ impl WindowManager {
         &self,
         app_type: &str,
         display_name: &str,
-        folder_name: &str,
+        workspace_id: &str,
         rect: &ScreenRect,
     ) -> Result<(), String> {
         let entry = self
-            .get(app_type, folder_name)
+            .get(app_type, workspace_id)
             .ok_or_else(|| format!("No {display_name} window registered"))?;
         if !ax_windows::position_window(
             entry.pid,
@@ -139,7 +140,7 @@ impl WindowManager {
             rect.width,
             rect.height,
         ) {
-            self.unregister(app_type, folder_name);
+            self.unregister(app_type, workspace_id);
             return Err(format!(
                 "Failed to position {display_name} window (stale reference)"
             ));
@@ -147,18 +148,18 @@ impl WindowManager {
         Ok(())
     }
 
-    pub fn raise_window(&self, app_type: &str, folder_name: &str) {
-        if let Some(entry) = self.get(app_type, folder_name) {
+    pub fn raise_window(&self, app_type: &str, workspace_id: &str) {
+        if let Some(entry) = self.get(app_type, workspace_id) {
             if !ax_windows::raise_window(entry.pid, entry.cg_window_id) {
-                self.unregister(app_type, folder_name);
+                self.unregister(app_type, workspace_id);
             }
         }
     }
 
-    /// Close all windows matching a given folder name, wait for them to disappear,
+    /// Close all windows matching a given workspace, wait for them to disappear,
     /// then unregister them. Returns an error if any window is still open after the timeout.
-    pub fn close_all_for_folder(&self, folder_name: &str) -> Result<(), String> {
-        let suffix = format!(":{folder_name}");
+    pub fn close_all_for_workspace(&self, workspace_id: &str) -> Result<(), String> {
+        let suffix = format!(":{workspace_id}");
         let matching: Vec<(String, WindowEntry)> = {
             let map = self.registry.lock().unwrap();
             map.iter()
@@ -235,6 +236,6 @@ fn save_to_disk(map: &RegistryMap) {
     }
 }
 
-fn registry_key(app_type: &str, folder_name: &str) -> String {
-    format!("{app_type}:{folder_name}")
+fn registry_key(app_type: &str, workspace_id: &str) -> String {
+    format!("{app_type}:{workspace_id}")
 }

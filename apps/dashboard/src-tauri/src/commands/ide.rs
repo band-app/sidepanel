@@ -182,21 +182,6 @@ fn set_active_workspace(active_state: &std::sync::Mutex<Option<String>>, workspa
     }
 }
 
-/// Map a folder name back to a workspace ID using the given app state.
-fn folder_name_to_workspace_id(folder_name: &str, app_state: &state::AppState) -> Option<String> {
-    for proj in &app_state.projects {
-        for wt in &proj.worktrees {
-            let wt_folder = Path::new(&wt.path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
-            if wt_folder == folder_name {
-                return Some(to_workspace_id(&proj.name, &wt.branch));
-            }
-        }
-    }
-    None
-}
 
 /// Check if the dashboard (our own process) is the frontmost application.
 fn is_dashboard_frontmost() -> bool {
@@ -235,9 +220,10 @@ fn detect_frontmost_workspace(app_state: &state::AppState) -> Option<String> {
     //    Cmd+` switching, iTerm (where title matching fails), and any app
     //    whose window we previously opened.
     if let Some(cg_id) = cg_id {
-        if let Some((_app_type, folder_name)) = WindowManager::global().find_by_cg_id(cg_id) {
-            if let Some(ws_id) = folder_name_to_workspace_id(&folder_name, app_state) {
-                return Some(ws_id);
+        if let Some((_app_type, workspace_id)) = WindowManager::global().find_by_cg_id(cg_id) {
+            // Verify the workspace still exists in current state
+            if find_workspace(&workspace_id, app_state).is_some() {
+                return Some(workspace_id);
             }
         }
     }
@@ -397,7 +383,7 @@ pub fn raise_workspace_windows(workspace_id: &str, cache: &ProjectCache) {
     let Some(app_state) = cache.get() else {
         return;
     };
-    let Some((worktree_path, folder_name)) = workspace_info(workspace_id, &app_state) else {
+    let Some((worktree_path, _folder_name)) = workspace_info(workspace_id, &app_state) else {
         return;
     };
 
@@ -409,7 +395,7 @@ pub fn raise_workspace_windows(workspace_id: &str, cache: &ProjectCache) {
 
     let wm = WindowManager::global();
     for app_config in &app_configs {
-        wm.raise_window(app_config.app_type(), &folder_name);
+        wm.raise_window(app_config.app_type(), workspace_id);
     }
 }
 
@@ -566,19 +552,21 @@ pub fn workspace_focus(
         if let Some(handler) = apps::get_handler(app_config.app_type()) {
             let config_json = app_config.to_json();
             let rect = rects[i].clone();
+            let ws = ws_id.clone();
             let folder = folder_name.clone();
             let path = wt_path.clone();
             let app_type = app_config.app_type().to_string();
             std::thread::spawn(move || {
-                let launched = match wm.open_or_focus(&*handler, &path, &folder, &config_json) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        log_debug(&format!("Failed to open {app_type}: {e}"));
-                        return;
-                    }
-                };
+                let launched =
+                    match wm.open_or_focus(&*handler, &path, &ws, &folder, &config_json) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            log_debug(&format!("Failed to open {app_type}: {e}"));
+                            return;
+                        }
+                    };
                 if let Err(e) =
-                    wm.position_window(handler.app_type(), handler.display_name(), &folder, &rect)
+                    wm.position_window(handler.app_type(), handler.display_name(), &ws, &rect)
                 {
                     log_debug(&format!("Failed to position {app_type}: {e}"));
                 }
@@ -601,30 +589,14 @@ pub fn workspace_focus(
 #[tauri::command]
 pub fn workspace_close(
     workspace_id: String,
-    project_cache: tauri::State<'_, ProjectCache>,
+    _project_cache: tauri::State<'_, ProjectCache>,
 ) -> Result<(), String> {
-    let app_state = project_cache
-        .get()
-        .or_else(|| refresh_project_cache(&project_cache))
-        .ok_or("Project state not available yet")?;
-
-    let folder_name = if let Some((_path, folder)) = workspace_info(&workspace_id, &app_state) {
-        folder
-    } else {
-        // Workspace may already be removed from state; derive folder_name from workspace_id
-        // by taking everything after the first '-' (project-branch format).
-        workspace_id
-            .split_once('-')
-            .map(|(_, branch)| branch.to_string())
-            .unwrap_or_default()
-    };
-
-    if folder_name.is_empty() {
+    if workspace_id.is_empty() {
         return Ok(());
     }
 
     let wm = WindowManager::global();
-    wm.close_all_for_folder(&folder_name)
+    wm.close_all_for_workspace(&workspace_id)
 }
 
 /// Return the currently active workspace ID from in-memory state.

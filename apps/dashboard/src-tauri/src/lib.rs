@@ -8,9 +8,9 @@ mod commands;
 mod git;
 mod state;
 
-/// Recursively find and remove all NSVisualEffectView instances from a view hierarchy.
+/// Recursively find and remove all `NSVisualEffectView` instances from a view hierarchy.
 /// This prevents macOS from crashing in `NSViewUpdateVibrancyForSubtree` when using
-/// a transparent title bar style with WebKit content.
+/// a transparent title bar style with `WebKit` content.
 #[cfg(target_os = "macos")]
 unsafe fn remove_visual_effect_views(view: cocoa::base::id) {
     use cocoa::base::{id, nil};

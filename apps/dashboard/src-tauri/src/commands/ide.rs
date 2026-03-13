@@ -342,10 +342,12 @@ unsafe fn raise_dashboard_windows() {
     type MsgSend = unsafe extern "C" fn(*const c_void, *const c_void) -> *const c_void;
     type MsgSendIdx = unsafe extern "C" fn(*const c_void, *const c_void, usize) -> *const c_void;
     type MsgSendCount = unsafe extern "C" fn(*const c_void, *const c_void) -> usize;
+    type MsgSendBool = unsafe extern "C" fn(*const c_void, *const c_void) -> i8;
 
     let msg: MsgSend = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
     let msg_idx: MsgSendIdx = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
     let msg_count: MsgSendCount = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
+    let msg_bool: MsgSendBool = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
 
     let cls = objc_getClass(c"NSApplication".as_ptr());
     if cls.is_null() {
@@ -361,9 +363,6 @@ unsafe fn raise_dashboard_windows() {
     if windows.is_null() {
         return;
     }
-
-    type MsgSendBool = unsafe extern "C" fn(*const c_void, *const c_void) -> i8;
-    let msg_bool: MsgSendBool = std::mem::transmute(objc_msgSend as unsafe extern "C" fn());
 
     let count = msg_count(windows, sel_registerName(c"count".as_ptr()));
     let obj_at = sel_registerName(c"objectAtIndex:".as_ptr());
@@ -440,7 +439,7 @@ pub fn start_focus_polling(app_handle: tauri::AppHandle) {
             // Sync last_active from shared state (workspace_focus may have changed it)
             if let Ok(guard) = active_state.lock() {
                 if *guard != last_active {
-                    last_active = guard.clone();
+                    last_active.clone_from(&guard);
                     apps_raised = false;
                 }
             }

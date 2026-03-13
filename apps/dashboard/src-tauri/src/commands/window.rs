@@ -37,7 +37,7 @@ pub async fn open_tasks_window(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let builder = builder.title_bar_style(tauri::TitleBarStyle::Transparent);
 
-    let _window = builder
+    let window = builder
         .build()
         .map_err(|e| format!("Failed to create tasks window: {e}"))?;
 
@@ -48,7 +48,7 @@ pub async fn open_tasks_window(app: AppHandle) -> Result<(), String> {
         use cocoa::appkit::NSColor;
         use cocoa::appkit::NSWindow;
         use cocoa::base::{id, nil};
-        let ns_window = _window.ns_window().unwrap() as id;
+        let ns_window = window.ns_window().unwrap() as id;
         unsafe {
             let color = NSColor::colorWithSRGBRed_green_blue_alpha_(nil, 0.0, 0.0, 0.0, 1.0);
             ns_window.setBackgroundColor_(color);

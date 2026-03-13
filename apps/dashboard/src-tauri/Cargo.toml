@@ -52,3 +52,4 @@ too_many_lines = "allow"                # Not actionable for some handlers
 
 [lints.rust]
 deprecated = "allow"                    # cocoa crate deprecations (Tauri dependency)
+unexpected_cfgs = "allow"               # objc 0.2 msg_send! uses old cfg(feature = "cargo-clippy")

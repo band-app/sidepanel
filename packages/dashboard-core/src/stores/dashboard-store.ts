@@ -64,6 +64,11 @@ export function createDashboardStore(adapter: DashboardAdapter): DashboardStore 
     },
 
     setActiveWorkspace: (workspaceId: string | null) => {
+      // While a user-initiated openWorkspace() is in progress, ignore external
+      // active-workspace events (e.g. from Tauri focus polling). The polling
+      // can briefly report the *old* workspace as frontmost before the new IDE
+      // window actually appears, which would revert the user's selection.
+      if (get()._openingWorkspace) return;
       if (get().activeWorkspaceId === workspaceId) return;
       set({ activeWorkspaceId: workspaceId });
     },

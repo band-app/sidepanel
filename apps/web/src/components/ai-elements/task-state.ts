@@ -12,7 +12,13 @@ export interface TaskItem {
 
 export type TaskMap = Map<string, TaskItem>;
 
-export const TASK_TOOL_NAMES = new Set(["TaskCreate", "TaskUpdate", "TaskList", "TaskGet"]);
+export const TASK_TOOL_NAMES = new Set([
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskList",
+  "TaskGet",
+  "TodoWrite",
+]);
 
 export function isTaskTool(toolName: string): boolean {
   return TASK_TOOL_NAMES.has(toolName);
@@ -71,7 +77,33 @@ function parseTaskListOutput(output: unknown): TaskItem[] | null {
   }
 }
 
+function applyTodoWriteCall(item: ToolCallItem): TaskMap {
+  const next: TaskMap = new Map();
+  const input = item.input as { todos?: unknown[] } | null;
+  const todos = input?.todos;
+  if (!Array.isArray(todos)) return next;
+
+  for (let i = 0; i < todos.length; i++) {
+    const entry = todos[i];
+    if (!entry || typeof entry !== "object") continue;
+    const obj = entry as Record<string, unknown>;
+    const content = obj.content ? String(obj.content) : undefined;
+    if (!content) continue;
+    next.set(`todo-${i}`, {
+      id: `todo-${i}`,
+      subject: content,
+      status: validateStatus(obj.status),
+      activeForm: obj.activeForm ? String(obj.activeForm) : undefined,
+    });
+  }
+  return next;
+}
+
 export function applyTaskToolCall(map: TaskMap, item: ToolCallItem): TaskMap {
+  if (item.toolName === "TodoWrite") {
+    return applyTodoWriteCall(item);
+  }
+
   const next = new Map(map);
 
   if (item.toolName === "TaskList") {

@@ -12,7 +12,7 @@ export function TaskListWidget({ tasks }: { tasks: TaskMap }) {
   return (
     <div className="not-prose mb-4 w-full rounded border border-border/50">
       <div className="flex items-center justify-between gap-2 p-3">
-        <span className="font-medium text-base">Tasks</span>
+        <span className="font-medium text-base">Todos</span>
         <span className="text-sm text-muted-foreground">
           {completedCount}/{taskList.length}
         </span>

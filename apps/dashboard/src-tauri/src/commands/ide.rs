@@ -182,7 +182,6 @@ fn set_active_workspace(active_state: &std::sync::Mutex<Option<String>>, workspa
     }
 }
 
-
 /// Check if the dashboard (our own process) is the frontmost application.
 fn is_dashboard_frontmost() -> bool {
     get_frontmost_window().is_some_and(|(pid, _)| pid as u32 == std::process::id())
@@ -570,14 +569,14 @@ pub fn workspace_focus(
             let path = wt_path.clone();
             let app_type = app_config.app_type().to_string();
             std::thread::spawn(move || {
-                let launched =
-                    match wm.open_or_focus(&*handler, &path, &ws, &folder, &config_json) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            log_debug(&format!("Failed to open {app_type}: {e}"));
-                            return;
-                        }
-                    };
+                let launched = match wm.open_or_focus(&*handler, &path, &ws, &folder, &config_json)
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log_debug(&format!("Failed to open {app_type}: {e}"));
+                        return;
+                    }
+                };
                 if let Err(e) =
                     wm.position_window(handler.app_type(), handler.display_name(), &ws, &rect)
                 {

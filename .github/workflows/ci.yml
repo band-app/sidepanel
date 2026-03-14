@@ -13,7 +13,7 @@ concurrency:
 jobs:
   create-runner:
     name: Create Runner
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, orchestrator]
     outputs:
       label: ${{ steps.create.outputs.label }}
       name: ${{ steps.create.outputs.name }}
@@ -107,7 +107,7 @@ jobs:
   delete-runner:
     name: Delete Runner
     needs: [create-runner, check]
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, orchestrator]
     if: ${{ always() }}
     steps:
       - uses: Cyclenerd/hcloud-github-runner@v1

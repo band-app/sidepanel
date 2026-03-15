@@ -76,7 +76,7 @@ export interface VsCodeAppConfig {
     name: string;
     command: string;
     split?: "horizontal" | "vertical";
-    agentType?: "claude-code";
+
   }[];
 }
 

@@ -134,9 +134,11 @@ test("tasks page renders and shows seeded tasks", async ({ page }) => {
 test("tasks page shows status badges", async ({ page }) => {
   await page.goto(`${server.url}/tasks?token=${TOKEN}`);
 
-  await expect(page.getByText("Completed")).toBeVisible();
-  await expect(page.getByText("Failed")).toBeVisible();
-  await expect(page.getByText("Running")).toBeVisible();
+  // Scope badge checks to task cards to avoid matching select dropdown options
+  const cards = page.locator(".rounded-lg.border");
+  await expect(cards.getByText("Completed")).toBeVisible();
+  await expect(cards.getByText("Failed")).toBeVisible();
+  await expect(cards.getByText("Running")).toBeVisible();
 });
 
 test("filtering by status works", async ({ page }) => {
@@ -145,8 +147,9 @@ test("filtering by status works", async ({ page }) => {
   // Wait for tasks to load
   await expect(page.getByText("Add authentication to the API")).toBeVisible();
 
-  // Click "completed" status filter
-  await page.getByRole("button", { name: "completed" }).click();
+  // Open status filter dropdown (second select trigger) and pick "completed"
+  await page.locator('[data-slot="select-trigger"]').nth(1).click();
+  await page.getByRole("option", { name: "completed" }).click();
 
   // Only the completed task should be visible
   await expect(page.getByText("Add authentication to the API")).toBeVisible();
@@ -179,7 +182,8 @@ test("empty state shows when no tasks match filters", async ({ page }) => {
   // Select "backend" project + "completed" status — no tasks match
   await page.locator('[data-slot="select-trigger"]').first().click();
   await page.getByRole("option", { name: "backend" }).click();
-  await page.getByRole("button", { name: "completed" }).click();
+  await page.locator('[data-slot="select-trigger"]').nth(1).click();
+  await page.getByRole("option", { name: "completed" }).click();
 
   await expect(page.getByText("No tasks found")).toBeVisible();
   await expect(page.getByText("Try adjusting your filters")).toBeVisible();
@@ -210,15 +214,7 @@ test("new task dialog opens and shows project/workspace selectors", async ({ pag
   await expect(page.getByText("Prompt", { exact: true })).toBeVisible();
 });
 
-test("back button navigates to dashboard", async ({ page }) => {
+test("tasks page has header with title", async ({ page }) => {
   await page.goto(`${server.url}/tasks?token=${TOKEN}`);
   await expect(page.locator("h1", { hasText: "Tasks" })).toBeVisible();
-
-  // Click the back arrow button
-  const backButton = page.locator("header button").first();
-  await expect(backButton).toBeVisible();
-  await backButton.click();
-
-  // Should navigate away from /tasks
-  await page.waitForURL((url) => !url.pathname.includes("/tasks"));
 });

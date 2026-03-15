@@ -19,11 +19,21 @@ cp -R node_modules/node-pty/lib dist/node_modules/node-pty/
 cp -RL node_modules/node-pty/prebuilds/* dist/node_modules/node-pty/prebuilds/
 chmod +x dist/node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true
 
-# Copy better-sqlite3 native module
+# Copy better-sqlite3 native module and its dependencies
 mkdir -p dist/node_modules/better-sqlite3/build/Release
 cp node_modules/better-sqlite3/package.json dist/node_modules/better-sqlite3/
 cp -R node_modules/better-sqlite3/lib dist/node_modules/better-sqlite3/
 cp -RL node_modules/better-sqlite3/build/Release/better_sqlite3.node dist/node_modules/better-sqlite3/build/Release/
+
+# better-sqlite3 uses 'bindings' (+ file-uri-to-path) to locate .node at runtime
+SQLITE_REAL="$(cd node_modules/better-sqlite3 && pwd -P)"
+SQLITE_PEERS="$(dirname "$SQLITE_REAL")"
+BINDINGS_REAL="$(cd "$SQLITE_PEERS/bindings" && pwd -P)"
+BINDINGS_PEERS="$(dirname "$BINDINGS_REAL")"
+mkdir -p dist/node_modules/bindings
+cp -RL "$BINDINGS_REAL"/* dist/node_modules/bindings/
+mkdir -p dist/node_modules/file-uri-to-path
+cp -RL "$BINDINGS_PEERS/file-uri-to-path"/* dist/node_modules/file-uri-to-path/
 
 # Copy Drizzle migrations
 rm -rf dist/migrations

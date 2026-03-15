@@ -26,7 +26,7 @@ jobs:
           github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
           hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
           server_type: cax21
-          image: "366781681"
+          image: "366782359"
           location: nbg1
 
   check:

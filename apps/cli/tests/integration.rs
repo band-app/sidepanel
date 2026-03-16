@@ -167,6 +167,183 @@ fn stderr(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stderr).trim().to_string()
 }
 
+// --- Init / onboarding tests ---
+// These don't need the web server since `band init` writes directly to disk.
+
+/// Run the band binary with a custom BAND_HOME, piping `stdin_data` as stdin.
+fn band_init(band_home: &Path, args: &[&str], stdin_data: &str) -> std::process::Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_band"))
+        .args(args)
+        .env("BAND_HOME", band_home)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to execute band");
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        stdin.write_all(stdin_data.as_bytes()).ok();
+    }
+
+    child.wait_with_output().expect("failed to wait on band")
+}
+
+/// Run band without stdin in a temp BAND_HOME (no settings.json).
+fn band_no_settings(band_home: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_band"))
+        .args(args)
+        .env("BAND_HOME", band_home)
+        .output()
+        .expect("failed to execute band")
+}
+
+#[test]
+fn init_creates_settings_claude_code_vscode() {
+    let tmp = tempfile::tempdir().unwrap();
+    let band_home = tmp.path().join(".band");
+
+    // Choose: 1 (Claude Code), 1 (VS Code)
+    let output = band_init(&band_home, &["init"], "1\n1\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("Settings saved"), "stdout: {out}");
+
+    // Verify settings.json was created
+    let settings_path = band_home.join("settings.json");
+    assert!(settings_path.exists(), "settings.json should exist");
+
+    let data = fs::read_to_string(&settings_path).unwrap();
+    let settings: serde_json::Value = serde_json::from_str(&data).unwrap();
+
+    // Coding agent
+    assert_eq!(settings["codingAgent"]["type"], "claude-code");
+    assert!(
+        settings["codingAgent"].get("command").is_none(),
+        "default claude-code should not have a custom command"
+    );
+
+    // Apps defaults — VS Code with terminals
+    let apps = settings["defaults"]["apps"].as_array().unwrap();
+    assert_eq!(apps.len(), 1);
+    assert_eq!(apps[0]["type"], "vscode");
+
+    let terminals = apps[0]["terminals"].as_array().unwrap();
+    assert_eq!(terminals.len(), 2);
+    assert_eq!(terminals[0]["name"], "agent");
+    assert!(
+        terminals[0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("claude --continue"),
+        "agent terminal should run claude: {}",
+        terminals[0]["command"]
+    );
+    assert_eq!(terminals[1]["name"], "shell");
+    assert_eq!(terminals[1]["split"], "vertical");
+}
+
+#[test]
+fn init_creates_settings_custom_agent_zed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let band_home = tmp.path().join(".band");
+
+    // Choose: 2 (Custom), enter command, 2 (Zed)
+    let output = band_init(&band_home, &["init"], "2\n/usr/bin/my-agent\n2\n");
+
+    assert!(output.status.success(), "stderr: {}", stderr(&output));
+
+    let data = fs::read_to_string(band_home.join("settings.json")).unwrap();
+    let settings: serde_json::Value = serde_json::from_str(&data).unwrap();
+
+    // Custom agent
+    assert_eq!(settings["codingAgent"]["type"], "claude-code");
+    assert_eq!(settings["codingAgent"]["command"], "/usr/bin/my-agent");
+
+    // Apps defaults — Zed + iTerm
+    let apps = settings["defaults"]["apps"].as_array().unwrap();
+    assert_eq!(apps.len(), 2);
+    assert_eq!(apps[0]["type"], "zed");
+    assert_eq!(apps[1]["type"], "iterm");
+
+    let commands = apps[1]["commands"].as_array().unwrap();
+    assert_eq!(commands.len(), 2);
+    assert!(
+        commands[0]["command"]
+            .as_str()
+            .unwrap()
+            .contains("/usr/bin/my-agent --continue"),
+        "agent terminal should use custom command: {}",
+        commands[0]["command"]
+    );
+}
+
+#[test]
+fn init_skips_when_settings_exist() {
+    let tmp = tempfile::tempdir().unwrap();
+    let band_home = tmp.path().join(".band");
+    fs::create_dir_all(&band_home).unwrap();
+
+    // Pre-create settings.json
+    fs::write(
+        band_home.join("settings.json"),
+        r#"{"worktreesDir": "/tmp/test"}"#,
+    )
+    .unwrap();
+
+    let output = band_init(&band_home, &["init"], "1\n1\n");
+
+    assert!(output.status.success());
+    let out = stdout(&output);
+    assert!(
+        out.contains("already exist"),
+        "should say settings already exist: {out}"
+    );
+
+    // Settings should not be overwritten
+    let data = fs::read_to_string(band_home.join("settings.json")).unwrap();
+    assert!(
+        data.contains("worktreesDir"),
+        "original settings should be preserved"
+    );
+}
+
+#[test]
+fn commands_fail_without_settings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let band_home = tmp.path().join(".band");
+    fs::create_dir_all(&band_home).unwrap();
+
+    // No settings.json — running any command (except init/schema) should fail with guidance
+    let output = band_no_settings(&band_home, &["projects", "list"]);
+
+    assert!(!output.status.success(), "should fail without settings");
+    let err = stderr(&output);
+    assert!(
+        err.contains("band init"),
+        "should suggest running band init: {err}"
+    );
+}
+
+#[test]
+fn schema_works_without_settings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let band_home = tmp.path().join(".band");
+    fs::create_dir_all(&band_home).unwrap();
+
+    // Schema should still work without settings
+    let output = band_no_settings(&band_home, &["schema"]);
+
+    assert!(
+        output.status.success(),
+        "schema should work without settings: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(out.contains("init"), "schema should list init command: {out}");
+}
+
 // --- Projects tests ---
 
 #[test]

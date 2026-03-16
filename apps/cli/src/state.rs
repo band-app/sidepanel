@@ -43,3 +43,16 @@ pub fn load_settings() -> Result<Settings, String> {
     let data = fs::read_to_string(&path).map_err(|e| format!("Failed to read settings: {e}"))?;
     serde_json::from_str(&data).map_err(|e| format!("Failed to parse settings: {e}"))
 }
+
+pub fn settings_exist() -> bool {
+    settings_file().exists()
+}
+
+pub fn save_settings(settings: &Settings) -> Result<(), String> {
+    let home = band_home();
+    fs::create_dir_all(&home).map_err(|e| format!("Failed to create directory {}: {e}", home.display()))?;
+    let path = settings_file();
+    let json =
+        serde_json::to_string_pretty(settings).map_err(|e| format!("Failed to serialize settings: {e}"))?;
+    fs::write(&path, json).map_err(|e| format!("Failed to write settings: {e}"))
+}

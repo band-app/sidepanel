@@ -1,4 +1,5 @@
 mod api;
+mod onboarding;
 mod render;
 mod shell;
 mod state;
@@ -41,6 +42,8 @@ enum Commands {
         #[command(subcommand)]
         cmd: CronjobsCmd,
     },
+    /// Run first-time setup wizard to configure coding agent and IDE
+    Init,
     /// Show current settings
     Settings,
     /// Manage the remote tunnel
@@ -244,6 +247,35 @@ fn main() {
     let cli = Cli::parse();
     let json_output = cli.output == "json";
 
+    // Init and Schema bypass the web server — handle before the main dispatch.
+    if let Commands::Init = cli.command {
+        if state::settings_exist() {
+            println!(
+                "Settings already exist at {}",
+                state::settings_file().display()
+            );
+            println!("To re-run setup, delete the file and run `band init` again.");
+            return;
+        }
+        match onboarding::run_onboarding() {
+            Ok(()) => return,
+            Err(e) => {
+                eprintln!("error: {e}");
+                process::exit(1);
+            }
+        }
+    }
+
+    // On first run (no settings.json), nudge the user to run `band init`.
+    if !state::settings_exist() {
+        if let Commands::Schema { .. } = cli.command {
+            // Schema is fine without settings
+        } else {
+            eprintln!("No settings found. Run `band init` to set up Band.");
+            process::exit(1);
+        }
+    }
+
     // Schema always outputs JSON, handle separately
     if let Commands::Schema { ref command } = cli.command {
         handle_schema(command.as_deref());
@@ -347,7 +379,7 @@ fn main() {
             TunnelCmd::Stop => cmd_tunnel_stop(),
         },
         Commands::Notify => cmd_notify(),
-        Commands::Schema { .. } => unreachable!(),
+        Commands::Init | Commands::Schema { .. } => unreachable!(),
     };
 
     match result {
@@ -1367,6 +1399,11 @@ fn build_schema(command: Option<&str>) -> Result<serde_json::Value, String> {
                 {"name": "project", "type": "string", "required": true, "positional": true, "description": "Project name"},
                 {"name": "branch", "type": "string", "required": true, "positional": true, "description": "Branch name"},
             ]
+        }),
+        serde_json::json!({
+            "name": "init",
+            "description": "Run first-time setup wizard to configure coding agent and IDE",
+            "parameters": []
         }),
         serde_json::json!({
             "name": "settings",

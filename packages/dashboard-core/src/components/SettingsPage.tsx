@@ -43,7 +43,7 @@ const DEFAULT_DEFAULTS = {
     {
       type: "vscode" as const,
       terminals: [
-        { name: "claude", command: "band tasks watch && claude" },
+        { name: "claude", command: "band tasks watch && claude --continue" },
         { name: "shell", command: "", split: "vertical" as const },
       ],
     },

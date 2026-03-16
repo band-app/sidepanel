@@ -22,9 +22,68 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Release
+  # ── Determine version ────────────────────────────────────────────────────
+  version:
+    name: Determine Version
     runs-on: macos-latest
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      bump_args: ${{ steps.version.outputs.bump_args }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            BUMP_ARGS="--version ${{ inputs.version }}"
+          elif [ -n "${{ inputs.bump }}" ]; then
+            BUMP_ARGS="--bump ${{ inputs.bump }}"
+          else
+            BUMP_ARGS="--from-commits"
+          fi
+          NEW_VERSION=$(node scripts/bump-version.mjs $BUMP_ARGS --dry-run 2>&1 | grep "^Version:" | sed 's/Version: .* → //')
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "bump_args=$BUMP_ARGS" >> "$GITHUB_OUTPUT"
+          echo "Will release version: $NEW_VERSION"
+
+      - name: Verify tag does not exist
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.new_version }}" >/dev/null 2>&1; then
+            echo "Error: Tag v${{ steps.version.outputs.new_version }} already exists"
+            exit 1
+          fi
+
+  # ── Build matrix (macOS + Windows) ───────────────────────────────────────
+  build:
+    name: Build (${{ matrix.os }})
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            bundle_target: dmg
+            artifact_glob: "apps/dashboard/src-tauri/target/release/bundle/dmg/*.dmg"
+          - os: windows-latest
+            bundle_target: nsis
+            artifact_glob: "apps/dashboard/src-tauri/target/release/bundle/nsis/*.exe"
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -80,48 +139,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Determine version
-        id: version
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            BUMP_ARGS="--version ${{ inputs.version }}"
-          elif [ -n "${{ inputs.bump }}" ]; then
-            BUMP_ARGS="--bump ${{ inputs.bump }}"
-          else
-            BUMP_ARGS="--from-commits"
-          fi
-          NEW_VERSION=$(node scripts/bump-version.mjs $BUMP_ARGS --dry-run 2>&1 | grep "^Version:" | sed 's/Version: .* → //')
-          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "bump_args=$BUMP_ARGS" >> "$GITHUB_OUTPUT"
-          echo "Will release version: $NEW_VERSION"
-
-      - name: Verify tag does not exist
-        run: |
-          if git rev-parse "v${{ steps.version.outputs.new_version }}" >/dev/null 2>&1; then
-            echo "Error: Tag v${{ steps.version.outputs.new_version }} already exists"
-            exit 1
-          fi
-
       - name: Bump versions
-        run: node scripts/bump-version.mjs ${{ steps.version.outputs.bump_args }}
+        run: node scripts/bump-version.mjs ${{ needs.version.outputs.bump_args }}
 
-      - name: Lint
+      - name: Lint (Biome)
+        run: pnpm exec biome check .
+
+      - name: Lint (cargo fmt)
+        shell: bash
         run: |
-          pnpm exec biome check .
           cargo fmt --manifest-path apps/cli/Cargo.toml -- --check
           cargo fmt --manifest-path apps/dashboard/src-tauri/Cargo.toml -- --check
-          cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings
+
+      - name: Lint (cargo clippy — CLI)
+        run: cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings
 
       - name: Build CLI
         run: pnpm build:cli
 
       - name: Lint (cargo clippy — Dashboard)
+        shell: bash
         run: |
           mkdir -p apps/web/dist
           touch apps/web/dist/start-server.mjs
           cargo clippy --manifest-path apps/dashboard/src-tauri/Cargo.toml -- -D warnings
 
       - name: Test
+        shell: bash
         run: |
           pnpm --filter @band/web test
           cargo test --manifest-path apps/cli/Cargo.toml
@@ -135,16 +179,53 @@ jobs:
           pnpm build:web
           pnpm --filter @band/dashboard build
 
-      - name: Build DMG
-        run: pnpm --filter @band/dashboard tauri build --ci --config '{"build":{"beforeBuildCommand":""}}'
+      - name: Build installer
+        shell: bash
+        run: |
+          pnpm --filter @band/dashboard tauri build --ci \
+            --bundles ${{ matrix.bundle_target }} \
+            --config '{"build":{"beforeBuildCommand":""}}'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          path: ${{ matrix.artifact_glob }}
+
+  # ── Release (runs after all builds succeed) ──────────────────────────────
+  release:
+    name: Create Release
+    needs: [version, build]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Bump versions
+        run: node scripts/bump-version.mjs ${{ needs.version.outputs.bump_args }}
 
       - name: Commit and tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "chore: release v${{ steps.version.outputs.new_version }}"
-          git tag "v${{ steps.version.outputs.new_version }}"
+          git commit -m "chore: release v${{ needs.version.outputs.new_version }}"
+          git tag "v${{ needs.version.outputs.new_version }}"
           git push origin main --follow-tags
 
       - name: Generate changelog
@@ -152,9 +233,9 @@ jobs:
         run: |
           LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           if [ -n "$LAST_TAG" ]; then
-            RANGE="${LAST_TAG}..v${{ steps.version.outputs.new_version }}"
+            RANGE="${LAST_TAG}..v${{ needs.version.outputs.new_version }}"
           else
-            RANGE="v${{ steps.version.outputs.new_version }}"
+            RANGE="v${{ needs.version.outputs.new_version }}"
           fi
           CHANGELOG=$(git log $RANGE --pretty=format:"- %s" --no-merges | grep -v "^- chore: release" || true)
           {
@@ -163,10 +244,16 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.new_version }}
-          name: v${{ steps.version.outputs.new_version }}
+          tag_name: v${{ needs.version.outputs.new_version }}
+          name: v${{ needs.version.outputs.new_version }}
           body: ${{ steps.changelog.outputs.changelog }}
-          files: apps/dashboard/src-tauri/target/release/bundle/dmg/*.dmg
+          files: release-artifacts/*

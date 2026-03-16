@@ -2,6 +2,8 @@ import { execFile } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
+import { enrichedEnv } from "./platform";
+
 export interface WorktreeInfo {
   branch: string;
   path: string;
@@ -46,11 +48,7 @@ export async function getRepoInfo(worktreePath: string): Promise<RepoInfo | null
 }
 
 export function gitCmd(): { command: string; env: NodeJS.ProcessEnv } {
-  const env = { ...process.env };
-  if (env.PATH) {
-    env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH}`;
-  }
-  return { command: "git", env };
+  return { command: "git", env: enrichedEnv() };
 }
 
 const MAX_BUFFER = 50 * 1024 * 1024; // 50 MB
@@ -69,10 +67,7 @@ export function execGit(args: string[], cwd: string): Promise<string> {
 }
 
 export function execGh(args: string[], cwd: string): Promise<string> {
-  const env = { ...process.env };
-  if (env.PATH) {
-    env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH}`;
-  }
+  const env = enrichedEnv();
   return new Promise((resolve, reject) => {
     execFile("gh", args, { cwd, env, maxBuffer: MAX_BUFFER }, (err, stdout, stderr) => {
       if (err) {

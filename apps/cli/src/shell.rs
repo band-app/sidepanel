@@ -6,21 +6,29 @@ use std::sync::OnceLock;
 pub fn shell_path() -> &'static str {
     static PATH: OnceLock<String> = OnceLock::new();
     PATH.get_or_init(|| {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        if let Ok(output) = Command::new(&shell)
-            .args(["-li", "-c", "echo $PATH"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .output()
+        #[cfg(unix)]
         {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return path;
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+            if let Ok(output) = Command::new(&shell)
+                .args(["-li", "-c", "echo $PATH"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .output()
+            {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    return path;
+                }
             }
+            format!(
+                "/opt/homebrew/bin:/usr/local/bin:{}",
+                std::env::var("PATH").unwrap_or_default()
+            )
         }
-        format!(
-            "/opt/homebrew/bin:/usr/local/bin:{}",
+        #[cfg(windows)]
+        {
+            // On Windows, PATH is always available in the environment — no login shell probe needed
             std::env::var("PATH").unwrap_or_default()
-        )
+        }
     })
 }

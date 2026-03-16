@@ -28,6 +28,7 @@ import type { CronjobDefinition } from "../lib/cronjob-types";
 import { execGit, gitCmd, listWorktrees } from "../lib/git";
 import { checkHooks, installHooks } from "../lib/hooks";
 import { resolvePendingInput } from "../lib/pending-inputs";
+import { enrichedEnv, enrichPath, isWindows, nullDevice, shellExecArgs } from "../lib/platform";
 import { checkPrereqs, shellPath } from "../lib/process-utils";
 import { runSetup } from "../lib/setup-runner";
 import {
@@ -122,10 +123,7 @@ const projectsRouter = t.router({
 
       let defaultBranch = "main";
       try {
-        const env = { ...process.env };
-        if (env.PATH) {
-          env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH}`;
-        }
+        const env = enrichedEnv();
         const output = execFileSync("git", ["symbolic-ref", "--short", "HEAD"], {
           cwd: input.path,
           env,
@@ -304,11 +302,12 @@ const workspacesRouter = t.router({
               if (existsSync(configPath)) {
                 const config = JSON.parse(readFileSync(configPath, "utf-8"));
                 if (config.teardown) {
-                  execFileSync("bash", ["-c", config.teardown], {
+                  const [teardownShell, teardownArgs] = shellExecArgs(config.teardown);
+                  execFileSync(teardownShell, teardownArgs, {
                     cwd: worktreePath,
                     env: {
                       ...process.env,
-                      PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}`,
+                      PATH: enrichPath(),
                     },
                     encoding: "utf-8",
                     timeout: 60_000,
@@ -401,8 +400,9 @@ const workspacesRouter = t.router({
         throw new Error(`Script "${input.scriptType}" not found`);
       }
 
+      const [shell, args] = shellExecArgs(scriptPath);
       return new Promise<{ ok: true }>((resolve, reject) => {
-        execFile("bash", [scriptPath], { cwd: input.path }, (err) => {
+        execFile(shell, args, { cwd: input.path }, (err) => {
           if (err) {
             reject(new Error(err.message));
           } else {
@@ -526,7 +526,7 @@ const workspaceRouter = t.router({
     try {
       mergeBase = (await execGit(["merge-base", defaultBranch, "HEAD"], cwd)).trim();
     } catch {
-      mergeBase = (await execGit(["hash-object", "-t", "tree", "/dev/null"], cwd)).trim();
+      mergeBase = (await execGit(["hash-object", "-t", "tree", nullDevice], cwd)).trim();
     }
 
     let diff = await execGit(["diff", mergeBase], cwd);
@@ -610,7 +610,7 @@ const workspaceRouter = t.router({
       try {
         mergeBase = (await execGit(["merge-base", defaultBranch, "HEAD"], cwd)).trim();
       } catch {
-        mergeBase = (await execGit(["hash-object", "-t", "tree", "/dev/null"], cwd)).trim();
+        mergeBase = (await execGit(["hash-object", "-t", "tree", nullDevice], cwd)).trim();
       }
 
       const statOutput = await execGit(["diff", "--stat", mergeBase], cwd);
@@ -903,10 +903,13 @@ const prereqsRouter = t.router({
 
   installTunnel: publicProcedure.mutation(async () => {
     const resolvedPath = await shellPath();
+    const [cmd, args]: [string, string[]] = isWindows
+      ? ["winget", ["install", "--id", "Cloudflare.cloudflared", "--accept-source-agreements"]]
+      : ["brew", ["install", "cloudflared"]];
     await new Promise<void>((resolve, reject) => {
       execFile(
-        "brew",
-        ["install", "cloudflared"],
+        cmd,
+        args,
         { env: { ...process.env, PATH: resolvedPath }, timeout: 120_000 },
         (err, _stdout, stderr) => {
           if (err) {

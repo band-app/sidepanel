@@ -1,5 +1,16 @@
-import { accessSync, constants, lstatSync, realpathSync, symlinkSync, unlinkSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  copyFileSync,
+  lstatSync,
+  mkdirSync,
+  realpathSync,
+  symlinkSync,
+  unlinkSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
+
+import { cliInstallDir, cliInstallPath, executableExtension, isWindows } from "./platform";
 
 export type CliStatus =
   | "Installed"
@@ -8,10 +19,11 @@ export type CliStatus =
   | "DirNotFound"
   | "NotWritable";
 
-const SYMLINK_PATH = "/usr/local/bin/band";
+const INSTALL_PATH = cliInstallPath();
 
 /** Find the CLI binary by trying multiple resolution strategies. */
 function findCliBinary(): string | null {
+  const binaryName = `band${executableExtension}`;
   const strategies = [
     // cwd = apps/web/ (Vite dev and production server)
     resolve(process.cwd(), ".."),
@@ -23,7 +35,7 @@ function findCliBinary(): string | null {
 
   for (const appsDir of strategies) {
     for (const profile of ["release", "debug"]) {
-      const p = join(appsDir, "cli", "target", profile, "band");
+      const p = join(appsDir, "cli", "target", profile, binaryName);
       try {
         lstatSync(p);
         return p;
@@ -37,12 +49,19 @@ function findCliBinary(): string | null {
 
 export async function checkCli(): Promise<CliStatus> {
   try {
-    const stat = lstatSync(SYMLINK_PATH);
-    if (!stat.isSymbolicLink()) {
+    const s = lstatSync(INSTALL_PATH);
+    if (isWindows) {
+      // On Windows we copy the binary — just check it's a file
+      if (!s.isFile()) {
+        return "ConflictingBinary";
+      }
+      return "Installed";
+    }
+    if (!s.isSymbolicLink()) {
       return "ConflictingBinary";
     }
     // Check if the symlink points to our CLI binary
-    const target = realpathSync(SYMLINK_PATH);
+    const target = realpathSync(INSTALL_PATH);
     if (!target.includes(join("apps", "cli", "target"))) {
       return "ConflictingBinary";
     }
@@ -50,9 +69,10 @@ export async function checkCli(): Promise<CliStatus> {
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
     if (code === "ENOENT") {
-      // Check if /usr/local/bin exists
+      // Check if install directory exists
+      const dir = cliInstallDir();
       try {
-        lstatSync("/usr/local/bin");
+        lstatSync(dir);
         return "NotInstalled";
       } catch {
         return "DirNotFound";
@@ -83,19 +103,37 @@ export async function installCli(): Promise<void> {
     );
   }
 
-  const dir = dirname(SYMLINK_PATH);
+  const dir = dirname(INSTALL_PATH);
 
+  if (isWindows) {
+    // On Windows: create the directory and copy the binary
+    try {
+      mkdirSync(dir, { recursive: true });
+    } catch {
+      // Directory may already exist
+    }
+    if (isDirWritable(dir)) {
+      copyFileSync(binaryPath, INSTALL_PATH);
+    } else {
+      throw new Error(
+        `Cannot write to ${dir}. Copy manually: copy "${binaryPath}" "${INSTALL_PATH}"`,
+      );
+    }
+    return;
+  }
+
+  // Unix: use symlinks
   if (isDirWritable(dir)) {
     // Directory is writable — do it directly
     try {
-      lstatSync(SYMLINK_PATH);
-      unlinkSync(SYMLINK_PATH);
+      lstatSync(INSTALL_PATH);
+      unlinkSync(INSTALL_PATH);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== "ENOENT") throw err;
     }
-    symlinkSync(binaryPath, SYMLINK_PATH);
+    symlinkSync(binaryPath, INSTALL_PATH);
   } else {
-    throw new Error(`Run: sudo ln -sf "${binaryPath}" "${SYMLINK_PATH}"`);
+    throw new Error(`Run: sudo ln -sf "${binaryPath}" "${INSTALL_PATH}"`);
   }
 }

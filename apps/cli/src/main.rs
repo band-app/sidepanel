@@ -394,20 +394,26 @@ fn open_configured_editor(worktree_path: &str) {
         return;
     };
 
-    // Try macOS `open -g` first (opens without stealing focus), fall back to CLI
-    let opened = std::process::Command::new("open")
-        .args(["-g", "-a", app_name, "--args", worktree_path])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if !opened {
-        let open_result = std::process::Command::new(cli_name)
-            .arg(worktree_path)
-            .env("PATH", shell::shell_path())
-            .output();
-        if let Err(e) = open_result {
-            eprintln!("Warning: failed to open {app_name}: {e}");
+    // macOS: try `open -g` first (opens without stealing focus), fall back to CLI
+    // Windows/Linux: use the CLI command directly
+    #[cfg(target_os = "macos")]
+    {
+        let opened = std::process::Command::new("open")
+            .args(["-g", "-a", app_name, "--args", worktree_path])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if opened {
+            return;
         }
+    }
+
+    let open_result = std::process::Command::new(cli_name)
+        .arg(worktree_path)
+        .env("PATH", shell::shell_path())
+        .output();
+    if let Err(e) = open_result {
+        eprintln!("Warning: failed to open {app_name}: {e}");
     }
 }
 

@@ -1,4 +1,5 @@
 use std::fs::OpenOptions;
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -14,7 +15,7 @@ const DEFAULT_WEB_SERVER_PORT: u16 = 3456;
 
 fn resolve_web_dir() -> Result<std::path::PathBuf, String> {
     // 1. Dev only: CARGO_MANIFEST_DIR (compile-time).
-    //    In release builds this is skipped so the DMG never accidentally
+    //    In release builds this is skipped so the installer never accidentally
     //    picks up the source repo's dist/ folder.
     #[cfg(debug_assertions)]
     {
@@ -29,11 +30,36 @@ fn resolve_web_dir() -> Result<std::path::PathBuf, String> {
 
     // 2. Production: relative to current executable
     if let Ok(exe) = std::env::current_exe() {
-        // macOS bundle: .app/Contents/MacOS/band-dashboard → .app/Contents/Resources/web
-        if let Some(macos_dir) = exe.parent() {
-            let resources = macos_dir.join("../Resources/web");
-            if resources.join("dist/server/server.js").exists() {
-                return Ok(resources);
+        if let Some(exe_dir) = exe.parent() {
+            // macOS bundle: .app/Contents/MacOS/band-dashboard → .app/Contents/Resources/web
+            #[cfg(target_os = "macos")]
+            {
+                let resources = exe_dir.join("../Resources/web");
+                if resources.join("dist/server/server.js").exists() {
+                    return Ok(resources);
+                }
+            }
+
+            // Windows NSIS installer: places web/ next to the executable
+            #[cfg(target_os = "windows")]
+            {
+                let web = exe_dir.join("web");
+                if web.join("dist/server/server.js").exists() {
+                    return Ok(web);
+                }
+            }
+
+            // Linux / generic fallback: try ../Resources/web and ./web
+            #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+            {
+                let resources = exe_dir.join("../Resources/web");
+                if resources.join("dist/server/server.js").exists() {
+                    return Ok(resources);
+                }
+                let web = exe_dir.join("web");
+                if web.join("dist/server/server.js").exists() {
+                    return Ok(web);
+                }
             }
         }
     }
@@ -52,22 +78,30 @@ pub(crate) fn get_configured_port() -> u16 {
 pub(crate) fn shell_path() -> &'static str {
     static PATH: OnceLock<String> = OnceLock::new();
     PATH.get_or_init(|| {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        if let Ok(output) = Command::new(&shell)
-            .args(["-li", "-c", "echo $PATH"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .output()
+        #[cfg(unix)]
         {
-            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !path.is_empty() {
-                return path;
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+            if let Ok(output) = Command::new(&shell)
+                .args(["-li", "-c", "echo $PATH"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .output()
+            {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    return path;
+                }
             }
+            format!(
+                "/opt/homebrew/bin:/usr/local/bin:{}",
+                std::env::var("PATH").unwrap_or_default()
+            )
         }
-        format!(
-            "/opt/homebrew/bin:/usr/local/bin:{}",
+        #[cfg(windows)]
+        {
+            // On Windows, PATH is already fully resolved in the environment
             std::env::var("PATH").unwrap_or_default()
-        )
+        }
     })
 }
 
@@ -79,27 +113,47 @@ pub(crate) fn get_token() -> Result<String, String> {
     })
 }
 
-/// Send SIGTERM to the entire process group, then fall back to SIGKILL.
+/// Kill a child process and its descendants.
 fn kill_process_tree(child: &mut Child) {
-    let pid = child.id() as libc::pid_t;
-    // Kill the process group (negative pid)
-    unsafe {
-        libc::kill(-pid, libc::SIGTERM);
+    #[cfg(unix)]
+    {
+        let pid = child.id() as libc::pid_t;
+        // Kill the process group (negative pid)
+        unsafe {
+            libc::kill(-pid, libc::SIGTERM);
+        }
+        // Give the process time to run shutdown hooks (e.g. tunnel cleanup)
+        std::thread::sleep(std::time::Duration::from_millis(3000));
     }
-    // Give the process time to run shutdown hooks (e.g. tunnel cleanup)
-    std::thread::sleep(std::time::Duration::from_millis(3000));
+    #[cfg(windows)]
+    {
+        // Use taskkill /T to terminate the process tree
+        let pid = child.id();
+        let _ = Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .output();
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+    }
     // Fallback: force-kill the child itself if still alive
     let _ = child.kill();
     let _ = child.wait();
 }
 
-/// Set the spawned process to be a new session leader so we can kill the tree.
+/// Configure the spawned process for clean process-group management.
 fn set_process_group(cmd: &mut Command) -> &mut Command {
+    #[cfg(unix)]
     unsafe {
         cmd.pre_exec(|| {
             libc::setsid();
             Ok(())
         })
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // CREATE_NEW_PROCESS_GROUP (0x00000200) — allows the child tree to be
+        // killed as a group via taskkill /T.
+        cmd.creation_flags(0x00000200)
     }
 }
 
@@ -193,50 +247,74 @@ fn parse_local_health(body: &str) -> bool {
     }
 }
 
-/// Check the local web server health endpoint.
-pub(crate) async fn check_local_health(port: u16, token: &str) -> bool {
-    let output = tokio::process::Command::new("curl")
-        .args([
-            "-s",
-            "-f",
-            "--max-time",
-            "2",
-            &format!("http://127.0.0.1:{port}/api/health?token={token}"),
-        ])
-        .output()
-        .await;
-    match output {
-        Ok(o) if o.status.success() => parse_local_health(&String::from_utf8_lossy(&o.stdout)),
-        _ => false,
-    }
+/// Create a ureq agent with a 2-second timeout for health checks.
+fn health_check_agent() -> ureq::Agent {
+    ureq::Agent::new_with_config(
+        ureq::config::Config::builder()
+            .timeout_global(Some(std::time::Duration::from_secs(2)))
+            .http_status_as_error(false)
+            .build(),
+    )
 }
 
-/// Check the local health endpoint synchronously using a blocking curl call.
+/// Check the local web server health endpoint.
+#[allow(clippy::unused_async)] // called from async Tauri command handler
+pub(crate) async fn check_local_health(port: u16, token: &str) -> bool {
+    check_local_health_sync(port, token)
+}
+
+/// Check the local health endpoint synchronously using a blocking HTTP call.
 fn check_local_health_sync(port: u16, token: &str) -> bool {
     let url = format!("http://127.0.0.1:{port}/api/health?token={token}");
-    let output = Command::new("curl")
-        .args(["-s", "-f", "--max-time", "2", &url])
-        .output();
-    match output {
-        Ok(o) if o.status.success() => parse_local_health(&String::from_utf8_lossy(&o.stdout)),
-        _ => false,
+    let agent = health_check_agent();
+    match agent.get(&url).call() {
+        Ok(mut response) => {
+            let body = response.body_mut().read_to_string().unwrap_or_default();
+            parse_local_health(&body)
+        }
+        Err(_) => false,
     }
 }
 
 /// Kill any process listening on the given port.
 pub(crate) fn kill_port_sync(port: u16) {
-    if let Ok(output) = Command::new("lsof").args([&format!("-ti:{port}")]).output() {
-        if output.status.success() {
-            let pids = String::from_utf8_lossy(&output.stdout);
-            for pid in pids.split_whitespace() {
-                if let Ok(pid_num) = pid.parse::<i32>() {
-                    unsafe {
-                        libc::kill(pid_num, libc::SIGTERM);
+    #[cfg(unix)]
+    {
+        if let Ok(output) = Command::new("lsof").args([&format!("-ti:{port}")]).output() {
+            if output.status.success() {
+                let pids = String::from_utf8_lossy(&output.stdout);
+                for pid in pids.split_whitespace() {
+                    if let Ok(pid_num) = pid.parse::<i32>() {
+                        unsafe {
+                            libc::kill(pid_num, libc::SIGTERM);
+                        }
                     }
                 }
+                // Give processes a moment to exit
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
-            // Give processes a moment to exit
-            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    }
+    #[cfg(windows)]
+    {
+        // Use netstat to find the PID, then taskkill
+        if let Ok(output) = Command::new("netstat").args(["-ano", "-p", "TCP"]).output() {
+            if output.status.success() {
+                let text = String::from_utf8_lossy(&output.stdout);
+                let port_str = format!(":{port}");
+                for line in text.lines() {
+                    if line.contains(&port_str) && line.contains("LISTENING") {
+                        if let Some(pid) = line.split_whitespace().last() {
+                            if pid != "0" {
+                                let _ = Command::new("taskkill")
+                                    .args(["/PID", pid, "/T", "/F"])
+                                    .output();
+                            }
+                        }
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+            }
         }
     }
 }
@@ -345,22 +423,7 @@ pub async fn webserver_stop(state: State<'_, WebServerState>) -> Result<(), Stri
 
     // Kill any process listening on the port (handles externally-started servers)
     let port = get_configured_port();
-    if let Ok(output) = tokio::process::Command::new("lsof")
-        .args([&format!("-ti:{port}")])
-        .output()
-        .await
-    {
-        if output.status.success() {
-            let pids = String::from_utf8_lossy(&output.stdout);
-            for pid in pids.split_whitespace() {
-                if let Ok(pid_num) = pid.parse::<i32>() {
-                    unsafe {
-                        libc::kill(pid_num, libc::SIGTERM);
-                    }
-                }
-            }
-        }
-    }
+    kill_port_sync(port);
 
     Ok(())
 }
@@ -384,10 +447,16 @@ mod tests {
     #[test]
     fn managed_process_tracks_child() {
         let mp = ManagedProcess::new();
+        #[cfg(unix)]
         let child = Command::new("sleep")
             .arg("60")
             .spawn()
             .expect("failed to spawn sleep");
+        #[cfg(windows)]
+        let child = Command::new("timeout")
+            .args(["/T", "60", "/NOBREAK"])
+            .spawn()
+            .expect("failed to spawn timeout");
         mp.set(child);
         assert!(mp.is_running());
         mp.kill();

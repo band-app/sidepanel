@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { cliInstallPath } from "./platform";
 import { whichBinary } from "./process-utils";
 
 const HOOK_EVENTS = ["UserPromptSubmit", "PostToolUse", "Stop"];
@@ -60,13 +61,11 @@ export async function checkHooks(): Promise<{
 }
 
 export async function installHooks(): Promise<void> {
-  // Find band binary
+  // Find band binary — check platform-specific install path first, then PATH
   let bandPath: string | null = null;
-  try {
-    const stat = await import("node:fs/promises").then((m) => m.stat("/usr/local/bin/band"));
-    if (stat) bandPath = "/usr/local/bin/band";
-  } catch {
-    // Try which
+  const platformPath = cliInstallPath();
+  if (existsSync(platformPath)) {
+    bandPath = platformPath;
   }
   if (!bandPath) {
     bandPath = await whichBinary("band");

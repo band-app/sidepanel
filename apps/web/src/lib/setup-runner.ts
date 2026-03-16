@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { enrichPath, shellExecArgs } from "./platform";
 import { emit } from "./watcher";
 
 interface SetupInfo {
@@ -39,11 +40,12 @@ export function runSetup(workspaceId: string, worktreePath: string, onComplete?:
     return;
   }
 
-  const child = spawn("bash", ["-c", setupCommand], {
+  const [shell, args] = shellExecArgs(setupCommand);
+  const child = spawn(shell, args, {
     cwd: worktreePath,
     env: {
       ...process.env,
-      PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}`,
+      PATH: enrichPath(),
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

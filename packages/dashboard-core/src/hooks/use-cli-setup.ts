@@ -41,13 +41,17 @@ export function useCliSetup() {
           case "DirNotFound":
             setState({
               status: "manual",
-              reason: "/usr/local/bin does not exist",
+              reason: navigator.platform?.startsWith("Win")
+                ? "%LOCALAPPDATA%\\Band does not exist"
+                : "/usr/local/bin does not exist",
             });
             break;
           case "NotWritable":
             setState({
               status: "manual",
-              reason: "/usr/local/bin is not writable",
+              reason: navigator.platform?.startsWith("Win")
+                ? "%LOCALAPPDATA%\\Band is not writable"
+                : "/usr/local/bin is not writable",
             });
             break;
         }

@@ -95,6 +95,73 @@ jobs:
       - name: Build frontend
         run: pnpm --filter @band/dashboard build
 
+  # ── Windows build & test ──────────────────────────────────────────────────
+  check-windows:
+    name: Windows Build & Test
+    runs-on: windows-latest
+    env:
+      NODE_OPTIONS: "--max-old-space-size=6144"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/pnpm/store
+          key: pnpm-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-windows-
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-windows-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-windows-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI
+        run: cargo build --release --manifest-path apps/cli/Cargo.toml
+
+      - name: Lint (cargo clippy - CLI)
+        run: cargo clippy --manifest-path apps/cli/Cargo.toml -- -D warnings
+
+      - name: Lint (cargo clippy - Dashboard)
+        shell: bash
+        run: |
+          mkdir -p apps/web/dist apps/dashboard/src-tauri/binaries
+          touch apps/web/dist/start-server.mjs
+          TARGET=$(rustc -vV | sed -n 's/host: //p')
+          cp "apps/cli/target/release/band.exe" "apps/dashboard/src-tauri/binaries/band-${TARGET}.exe"
+          cargo clippy --manifest-path apps/dashboard/src-tauri/Cargo.toml -- -D warnings
+
+      - name: Build web
+        run: pnpm build:web
+
+      - name: Test (CLI)
+        run: cargo test --manifest-path apps/cli/Cargo.toml
+
+      - name: Test (Dashboard)
+        run: cargo test --manifest-path apps/dashboard/src-tauri/Cargo.toml
+
   delete-runner:
     name: Delete Runner
     needs: [create-runner, check]

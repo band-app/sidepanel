@@ -1,30 +1,35 @@
 import { execFile } from "node:child_process";
 
+import { enrichPath, shellPathProbeArgs, whichCommand } from "./platform";
+
 let cachedShellPath: string | null = null;
 
 export async function shellPath(): Promise<string> {
   if (cachedShellPath) return cachedShellPath;
 
-  const shell = process.env.SHELL || "/bin/zsh";
-  try {
-    const result = await new Promise<string>((resolve, reject) => {
-      execFile(shell, ["-li", "-c", "echo $PATH"], { timeout: 5000 }, (err, stdout) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(stdout.trim());
+  const probeArgs = shellPathProbeArgs();
+  if (probeArgs) {
+    const [shell, args] = probeArgs;
+    try {
+      const result = await new Promise<string>((resolve, reject) => {
+        execFile(shell, args, { timeout: 5000 }, (err, stdout) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(stdout.trim());
+        });
       });
-    });
-    if (result) {
-      cachedShellPath = result;
-      return result;
+      if (result) {
+        cachedShellPath = result;
+        return result;
+      }
+    } catch {
+      // Fall through to default
     }
-  } catch {
-    // Fall through to default
   }
 
-  const fallback = `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH || ""}`;
+  const fallback = enrichPath();
   cachedShellPath = fallback;
   return fallback;
 }
@@ -33,15 +38,22 @@ export async function whichBinary(name: string): Promise<string | null> {
   const resolvedPath = await shellPath();
   try {
     const result = await new Promise<string>((resolve, reject) => {
-      execFile("which", [name], { env: { ...process.env, PATH: resolvedPath } }, (err, stdout) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(stdout.trim());
-      });
+      execFile(
+        whichCommand,
+        [name],
+        { env: { ...process.env, PATH: resolvedPath } },
+        (err, stdout) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(stdout.trim());
+        },
+      );
     });
-    return result || null;
+    // On Windows, `where` may return multiple lines — take the first
+    const firstLine = result.split("\n")[0]?.trim() || null;
+    return firstLine || null;
   } catch {
     return null;
   }

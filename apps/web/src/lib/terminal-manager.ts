@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { createLogger } from "@band/logger";
 import type { IPty } from "node-pty";
+import { defaultShell, isWindows } from "./platform";
 import { shellPath } from "./process-utils";
 import { resolveWorkspace } from "./workspace";
 
@@ -29,7 +30,7 @@ export async function getOrSpawnTerminal(workspaceId: string): Promise<TerminalS
     throw new Error(`Workspace not found: ${workspaceId}`);
   }
 
-  const shell = process.env.SHELL || "/bin/zsh";
+  const shell = defaultShell();
   const resolvedPath = await shellPath();
 
   // Filter env to only string values — posix_spawnp fails on undefined/null
@@ -40,13 +41,16 @@ export async function getOrSpawnTerminal(workspaceId: string): Promise<TerminalS
     }
   }
   env.PATH = resolvedPath;
-  env.TERM = "xterm-256color";
+  if (!isWindows) {
+    env.TERM = "xterm-256color";
+  }
 
   const cwd = workspace.worktree.path;
   if (!existsSync(cwd)) {
     throw new Error(`Workspace directory does not exist: ${cwd}`);
   }
-  if (!existsSync(shell)) {
+  // On Windows, shell may be "cmd.exe" (resolved via PATH, not an absolute path)
+  if (!isWindows && !existsSync(shell)) {
     throw new Error(`Shell not found: ${shell}`);
   }
 

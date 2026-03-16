@@ -2,7 +2,9 @@ use std::process::Command;
 
 fn git_cmd() -> Command {
     let mut cmd = Command::new("git");
-    // Ensure git is found via Homebrew on macOS
+    // On Unix, prepend Homebrew paths to find git installed via Homebrew.
+    // On Windows, PATH is already correct — no extra dirs needed.
+    #[cfg(unix)]
     if let Ok(path) = std::env::var("PATH") {
         cmd.env("PATH", format!("/opt/homebrew/bin:/usr/local/bin:{path}"));
     }

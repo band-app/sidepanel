@@ -38,5 +38,16 @@ export interface DashboardState {
 
 export const BAND_DIR = ".band";
 export const STATUS_DIR = "status";
-export const BAND_HOME = "~/.band";
+
+/**
+ * Display-friendly BAND_HOME path.
+ * On Windows, Band data lives under %USERPROFILE%\.band.
+ * On Unix, it lives under ~/.band.
+ * Actual path resolution is done by the web server's state.ts using os.homedir().
+ */
+export const BAND_HOME =
+  typeof navigator !== "undefined" && navigator.platform?.startsWith("Win")
+    ? "%USERPROFILE%\\.band"
+    : "~/.band";
+
 export const STATUS_HOME = `${BAND_HOME}/${STATUS_DIR}`;

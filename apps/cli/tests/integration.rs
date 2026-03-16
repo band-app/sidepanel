@@ -21,9 +21,9 @@ struct TestEnv {
 impl TestEnv {
     fn new() -> Self {
         let tmp = tempfile::tempdir().expect("create tempdir");
-        // home_dir is the fake HOME — server computes band_home as HOME/.band
+        // home_dir is the fake HOME parent directory
         let home_dir = tmp.path().to_path_buf();
-        // band_dir is HOME/.band — used as BAND_HOME for the CLI
+        // band_dir is HOME/.band — passed as BAND_HOME to both CLI and server
         let band_dir = home_dir.join(".band");
         let repo_path = tmp.path().join("my-project");
         let token = "test-token-12345";
@@ -81,6 +81,7 @@ impl TestEnv {
         let mut child = Command::new("node")
             .arg(&web_dist)
             .env("HOME", &home_dir)
+            .env("BAND_HOME", &band_dir)
             .env("PORT", port.to_string())
             .env("NODE_ENV", "production")
             .stdout(Stdio::piped())
@@ -396,11 +397,12 @@ fn setup_script_runs_on_create() {
 
     let band_dir = env.repo_path.join(".band");
     fs::create_dir_all(&band_dir).unwrap();
-    fs::write(
-        band_dir.join("config.json"),
-        r#"{ "setup": "touch setup-ran.txt" }"#,
-    )
-    .unwrap();
+    let setup_cmd = if cfg!(windows) {
+        r#"{ "setup": "type nul > setup-ran.txt" }"#
+    } else {
+        r#"{ "setup": "touch setup-ran.txt" }"#
+    };
+    fs::write(band_dir.join("config.json"), setup_cmd).unwrap();
     git(&env.repo_path, &["add", ".band/config.json"]);
     git(&env.repo_path, &["commit", "-m", "add config"]);
 
@@ -408,10 +410,17 @@ fn setup_script_runs_on_create() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
 
     let path = stdout(&output);
-    assert!(
-        Path::new(&path).join("setup-ran.txt").exists(),
-        "setup script should have created setup-ran.txt"
-    );
+    let marker = Path::new(&path).join("setup-ran.txt");
+    // Setup runs asynchronously on the server — poll until the marker file appears
+    let mut found = false;
+    for _ in 0..50 {
+        if marker.exists() {
+            found = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(found, "setup script should have created setup-ran.txt");
 }
 
 #[test]
@@ -421,8 +430,13 @@ fn teardown_script_runs_on_remove() {
     let band_dir = env.repo_path.join(".band");
     fs::create_dir_all(&band_dir).unwrap();
     let marker_path = env.band_dir.join("teardown-ran.txt");
+    let teardown_cmd = if cfg!(windows) {
+        format!(r#"type nul > "{}""#, marker_path.to_string_lossy())
+    } else {
+        format!("touch '{}'", marker_path.to_string_lossy())
+    };
     let config = serde_json::json!({
-        "teardown": format!("touch '{}'", marker_path.to_string_lossy())
+        "teardown": teardown_cmd
     });
     fs::write(
         band_dir.join("config.json"),

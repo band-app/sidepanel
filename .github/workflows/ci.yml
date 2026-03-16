@@ -77,7 +77,13 @@ jobs:
         run: pnpm --filter @band/web test
 
       - name: Install Playwright Chromium
-        run: pnpm --filter @band/web exec playwright install --with-deps chromium
+        run: |
+          # Wait for unattended-upgrades or other apt processes to release the dpkg lock
+          while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+            echo "Waiting for dpkg lock to be released..."
+            sleep 5
+          done
+          pnpm --filter @band/web exec playwright install --with-deps chromium
 
       - name: Test e2e (web)
         run: pnpm --filter @band/web test:e2e

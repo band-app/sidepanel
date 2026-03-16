@@ -1,4 +1,3 @@
-use std::process::{Command, Stdio};
 use std::sync::OnceLock;
 
 /// Resolve the user's full shell PATH once (includes nvm/volta/homebrew paths).
@@ -8,6 +7,7 @@ pub fn shell_path() -> &'static str {
     PATH.get_or_init(|| {
         #[cfg(unix)]
         {
+            use std::process::{Command, Stdio};
             let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
             if let Ok(output) = Command::new(&shell)
                 .args(["-li", "-c", "echo $PATH"])

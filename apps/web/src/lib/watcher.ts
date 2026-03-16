@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { watch } from "chokidar";
 import { startBranchStatusPoller, stopBranchStatusPoller } from "./branch-status-poller";
-import { getLoop, type LoopInfo } from "./loop-runner";
+import { getLoop } from "./loop-runner";
 import { getRunningSetups } from "./setup-runner";
 import {
   bandHome,

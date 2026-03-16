@@ -27,6 +27,17 @@ import {
 import type { CronjobDefinition } from "../lib/cronjob-types";
 import { execGit, gitCmd, listWorktrees } from "../lib/git";
 import { checkHooks, installHooks } from "../lib/hooks";
+import {
+  getBufferedEvents as getBufferedLoopEvents,
+  getLoop,
+  type LoopEvent,
+  pauseLoop,
+  resumeLoop,
+  stopLoop,
+  submitLoop,
+  subscribe as subscribeLoop,
+} from "../lib/loop-runner";
+import { listIterations, listLoops } from "../lib/loop-store";
 import { resolvePendingInput } from "../lib/pending-inputs";
 import { checkPrereqs, shellPath } from "../lib/process-utils";
 import { runSetup } from "../lib/setup-runner";
@@ -51,17 +62,6 @@ import {
   TaskConflictError,
 } from "../lib/task-runner";
 import { listTasks, loadTask } from "../lib/task-store";
-import {
-  getBufferedEvents as getBufferedLoopEvents,
-  getLoop,
-  type LoopEvent,
-  pauseLoop,
-  resumeLoop,
-  stopLoop,
-  submitLoop,
-  subscribe as subscribeLoop,
-} from "../lib/loop-runner";
-import { listIterations, listLoops } from "../lib/loop-store";
 import { getTunnelStatus, startTunnel, stopTunnel } from "../lib/tunnel";
 import { subscribe as subscribeStatus } from "../lib/watcher";
 import { resolveWorkspace } from "../lib/workspace";
@@ -1507,9 +1507,7 @@ const loopsRouter = t.router({
         .object({
           workspaceId: z.string().optional(),
           project: z.string().optional(),
-          status: z
-            .enum(["running", "paused", "completed", "failed", "stopped"])
-            .optional(),
+          status: z.enum(["running", "paused", "completed", "failed", "stopped"]).optional(),
         })
         .optional(),
     )
@@ -1549,57 +1547,47 @@ const loopsRouter = t.router({
       }
     }),
 
-  get: publicProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .query(({ input }) => {
-      const loop = getLoop(input.workspaceId);
-      return { loop };
-    }),
+  get: publicProcedure.input(z.object({ workspaceId: z.string() })).query(({ input }) => {
+    const loop = getLoop(input.workspaceId);
+    return { loop };
+  }),
 
-  pause: publicProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .mutation(({ input }) => {
-      const paused = pauseLoop(input.workspaceId);
-      if (!paused) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No running loop found for this workspace",
-        });
-      }
-      return { paused: true };
-    }),
+  pause: publicProcedure.input(z.object({ workspaceId: z.string() })).mutation(({ input }) => {
+    const paused = pauseLoop(input.workspaceId);
+    if (!paused) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "No running loop found for this workspace",
+      });
+    }
+    return { paused: true };
+  }),
 
-  resume: publicProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .mutation(({ input }) => {
-      const resumed = resumeLoop(input.workspaceId);
-      if (!resumed) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No paused loop found for this workspace",
-        });
-      }
-      return { resumed: true };
-    }),
+  resume: publicProcedure.input(z.object({ workspaceId: z.string() })).mutation(({ input }) => {
+    const resumed = resumeLoop(input.workspaceId);
+    if (!resumed) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "No paused loop found for this workspace",
+      });
+    }
+    return { resumed: true };
+  }),
 
-  stop: publicProcedure
-    .input(z.object({ workspaceId: z.string() }))
-    .mutation(({ input }) => {
-      const stopped = stopLoop(input.workspaceId);
-      if (!stopped) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "No active loop found for this workspace",
-        });
-      }
-      return { stopped: true };
-    }),
+  stop: publicProcedure.input(z.object({ workspaceId: z.string() })).mutation(({ input }) => {
+    const stopped = stopLoop(input.workspaceId);
+    if (!stopped) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "No active loop found for this workspace",
+      });
+    }
+    return { stopped: true };
+  }),
 
-  iterations: publicProcedure
-    .input(z.object({ loopId: z.string() }))
-    .query(({ input }) => {
-      return { iterations: listIterations(input.loopId) };
-    }),
+  iterations: publicProcedure.input(z.object({ loopId: z.string() })).query(({ input }) => {
+    return { iterations: listIterations(input.loopId) };
+  }),
 
   stream: publicProcedure
     .input(z.object({ workspaceId: z.string() }))
@@ -1632,11 +1620,7 @@ const loopsRouter = t.router({
       for (const event of buffered) yield event;
 
       // If loop is already done and no live events queued, stop
-      if (
-        loop.status !== "running" &&
-        loop.status !== "paused" &&
-        queue.length === 0
-      ) {
+      if (loop.status !== "running" && loop.status !== "paused" && queue.length === 0) {
         unsubscribe();
         return;
       }

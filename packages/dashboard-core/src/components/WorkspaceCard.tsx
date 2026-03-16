@@ -18,7 +18,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import { useCapabilities } from "../context";
+import { useAdapter, useCapabilities } from "../context";
 import { useRemoveWorkspace } from "../hooks/use-project-mutations";
 import { toWorkspaceId } from "../lib/workspace-id";
 import { useDashboardStore } from "../stores/index";
@@ -58,6 +58,7 @@ export function WorkspaceCard({
   editMode,
 }: Props) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const adapter = useAdapter();
   const capabilities = useCapabilities();
 
   useEffect(() => {
@@ -78,6 +79,13 @@ export function WorkspaceCard({
   const href = capabilities.getWorkspaceHref?.(workspaceId);
 
   const handleClick = () => {
+    // Clear needs_attention badge when clicking a workspace, mirroring the
+    // Tauri desktop app's behaviour where focusing a workspace window
+    // automatically dismisses the notification.
+    if (status?.agent?.status === "needs_attention") {
+      adapter.clearNeedsAttention?.(workspaceId);
+    }
+
     if (href && capabilities.navigate) {
       capabilities.navigate(href);
     } else if (!href) {

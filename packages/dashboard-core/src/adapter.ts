@@ -60,6 +60,14 @@ export interface DashboardAdapter {
   checkCli(): Promise<CliStatus>;
   installCli(): Promise<void>;
 
+  // Status
+  /**
+   * Clear `needs_attention` agent status by resetting it to `waiting`.
+   * Only resets when the current status is actually `needs_attention` so
+   * it won't clobber a `working` status while an agent is running.
+   */
+  clearNeedsAttention?(workspaceId: string): Promise<void>;
+
   // Window management
   closeWorkspaceWindows(workspaceId: string): Promise<void>;
 

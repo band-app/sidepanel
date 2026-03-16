@@ -76,6 +76,19 @@ export class WebDashboardAdapter implements DashboardAdapter {
     // No-op: window management is handled by the desktop app
   }
 
+  async clearNeedsAttention(workspaceId: string): Promise<void> {
+    try {
+      const current = await this.trpc.statuses.get.query({ workspaceId });
+      if (current?.agent?.status !== "needs_attention") return;
+      await this.trpc.statuses.update.mutate({
+        workspaceId,
+        agent: { status: "waiting" },
+      });
+    } catch {
+      // Best-effort — don't block workspace navigation on failure
+    }
+  }
+
   async closeWorkspaceWindows(_workspaceId: string): Promise<void> {
     // No-op: window management is handled by the desktop app
   }

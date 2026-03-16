@@ -1,91 +1,91 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@band/ui";
 import { Ban, CircleAlert, CircleCheck, GitMerge, Loader } from "lucide-react";
-import { useCapabilities } from "../context";
+import type { ComponentType, ReactNode, SVGProps } from "react";
 import type { CIStatus } from "../types";
 
 interface Props {
   ci: CIStatus;
 }
 
-export function CIStatusIndicator({ ci }: Props) {
-  const capabilities = useCapabilities();
+/**
+ * Wraps an icon in an `<a>` tag when a URL is present so that clicking the
+ * CI badge opens the PR / workflow-run in a new browser tab.  Using a native
+ * anchor element instead of a programmatic `window.open` call is more
+ * reliable (avoids popup-blocker issues, works with Ctrl/Cmd-click and
+ * right-click → "Open in new tab") and more accessible.
+ *
+ * `e.stopPropagation()` prevents the WorkspaceCard's onClick from also
+ * firing, which would navigate to the workspace chat page.
+ */
+function CIIcon({
+  Icon,
+  ci,
+  colorClass,
+  extraClass,
+  tooltip,
+}: {
+  Icon: ComponentType<SVGProps<SVGSVGElement>>;
+  ci: CIStatus;
+  colorClass: string;
+  extraClass?: string;
+  tooltip: ReactNode;
+}) {
+  const icon = <Icon className={`size-3.5 shrink-0 ${colorClass} ${extraClass ?? ""}`} />;
 
-  const handleOpenUrl = (url: string | undefined | null, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (url) capabilities.openUrl?.(url);
-  };
-
-  const clickable = !!ci.url && !!capabilities.openUrl;
-  const cursorClass = clickable ? "cursor-pointer" : "";
-
-  if (ci.state === "merged") {
+  if (ci.url) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <GitMerge
-            className={`size-3.5 shrink-0 text-violet-400 ${cursorClass}`}
-            onClick={(e) => handleOpenUrl(ci.url, e)}
-          />
+          <a
+            href={ci.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex cursor-pointer"
+          >
+            {icon}
+          </a>
         </TooltipTrigger>
-        <TooltipContent>Merged</TooltipContent>
+        <TooltipContent>{tooltip}</TooltipContent>
       </Tooltip>
     );
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{icon}</TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function CIStatusIndicator({ ci }: Props) {
+  if (ci.state === "merged") {
+    return <CIIcon Icon={GitMerge} ci={ci} colorClass="text-violet-400" tooltip="Merged" />;
   }
 
   if (ci.state === "success") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <CircleCheck
-            className={`size-3.5 shrink-0 text-green-400 ${cursorClass}`}
-            onClick={(e) => handleOpenUrl(ci.url, e)}
-          />
-        </TooltipTrigger>
-        <TooltipContent>CI passed</TooltipContent>
-      </Tooltip>
-    );
+    return <CIIcon Icon={CircleCheck} ci={ci} colorClass="text-green-400" tooltip="CI passed" />;
   }
 
   if (ci.state === "failure") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <CircleAlert
-            className={`size-3.5 shrink-0 text-red-400 ${cursorClass}`}
-            onClick={(e) => handleOpenUrl(ci.url, e)}
-          />
-        </TooltipTrigger>
-        <TooltipContent>CI failed</TooltipContent>
-      </Tooltip>
-    );
+    return <CIIcon Icon={CircleAlert} ci={ci} colorClass="text-red-400" tooltip="CI failed" />;
   }
 
   if (ci.state === "running" || ci.state === "pending") {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Loader
-            className={`size-3.5 shrink-0 text-yellow-400 animate-spin ${cursorClass}`}
-            onClick={(e) => handleOpenUrl(ci.url, e)}
-          />
-        </TooltipTrigger>
-        <TooltipContent>{ci.state === "running" ? "CI running" : "CI pending"}</TooltipContent>
-      </Tooltip>
+      <CIIcon
+        Icon={Loader}
+        ci={ci}
+        colorClass="text-yellow-400"
+        extraClass="animate-spin"
+        tooltip={ci.state === "running" ? "CI running" : "CI pending"}
+      />
     );
   }
 
   if (ci.state === "cancelled") {
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Ban
-            className={`size-3.5 shrink-0 text-gray-400 ${cursorClass}`}
-            onClick={(e) => handleOpenUrl(ci.url, e)}
-          />
-        </TooltipTrigger>
-        <TooltipContent>CI cancelled</TooltipContent>
-      </Tooltip>
-    );
+    return <CIIcon Icon={Ban} ci={ci} colorClass="text-gray-400" tooltip="CI cancelled" />;
   }
 
   return null;

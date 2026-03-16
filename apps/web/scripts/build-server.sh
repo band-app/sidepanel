@@ -12,11 +12,23 @@ esbuild start-server.ts \
   --external:better-sqlite3 \
   --banner:js="import{createRequire}from'module';import{fileURLToPath as __fu}from'url';import{dirname as __dn}from'path';const require=createRequire(import.meta.url);const __filename=__fu(import.meta.url);const __dirname=__dn(__filename);"
 
-# Copy node-pty native module
+# Copy node-pty native module (only current platform prebuilds, no debug symbols)
 mkdir -p dist/node_modules/node-pty/prebuilds
-cp node_modules/node-pty/package.json dist/node_modules/node-pty/
-cp -R node_modules/node-pty/lib dist/node_modules/node-pty/
-cp -RL node_modules/node-pty/prebuilds/* dist/node_modules/node-pty/prebuilds/
+cp -RL node_modules/node-pty/package.json dist/node_modules/node-pty/
+cp -RL node_modules/node-pty/lib dist/node_modules/node-pty/
+PTY_PREBUILDS="$(cd node_modules/node-pty/prebuilds && pwd -P)"
+PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$PLATFORM" in
+  darwin) PREBUILD_GLOB="darwin-*" ;;
+  linux)  PREBUILD_GLOB="linux-*" ;;
+  *)      PREBUILD_GLOB="*" ;;
+esac
+for dir in "$PTY_PREBUILDS"/$PREBUILD_GLOB; do
+  [ -d "$dir" ] || continue
+  target="dist/node_modules/node-pty/prebuilds/$(basename "$dir")"
+  mkdir -p "$target"
+  find "$dir" -maxdepth 1 -type f ! -name '*.pdb' -exec cp {} "$target/" \;
+done
 chmod +x dist/node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true
 
 # Copy better-sqlite3 native module and its dependencies

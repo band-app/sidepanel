@@ -153,7 +153,7 @@ fn set_process_group(cmd: &mut Command) -> &mut Command {
         use std::os::windows::process::CommandExt;
         // CREATE_NEW_PROCESS_GROUP (0x00000200) — allows the child tree to be
         // killed as a group via taskkill /T.
-        cmd.creation_flags(0x00000200)
+        cmd.creation_flags(0x0000_0200)
     }
 }
 

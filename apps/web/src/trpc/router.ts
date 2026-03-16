@@ -400,7 +400,10 @@ const workspacesRouter = t.router({
         throw new Error(`Script "${input.scriptType}" not found`);
       }
 
-      const [shell, args] = shellExecArgs(scriptPath);
+      // On Unix, run via bash (reads the file); on Windows, run via the shell's exec flag.
+      const [shell, args]: [string, string[]] = isWindows
+        ? shellExecArgs(scriptPath)
+        : ["bash", [scriptPath]];
       return new Promise<{ ok: true }>((resolve, reject) => {
         execFile(shell, args, { cwd: input.path }, (err) => {
           if (err) {

@@ -17,10 +17,12 @@ export function gitCmd(): { command: string; env: NodeJS.ProcessEnv } {
   return { command: "git", env };
 }
 
+const MAX_BUFFER = 50 * 1024 * 1024; // 50 MB
+
 export function execGit(args: string[], cwd: string): Promise<string> {
   const { command, env } = gitCmd();
   return new Promise((resolve, reject) => {
-    execFile(command, args, { cwd, env }, (err, stdout, stderr) => {
+    execFile(command, args, { cwd, env, maxBuffer: MAX_BUFFER }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(stderr || err.message));
         return;
@@ -36,7 +38,7 @@ export function execGh(args: string[], cwd: string): Promise<string> {
     env.PATH = `/opt/homebrew/bin:/usr/local/bin:${env.PATH}`;
   }
   return new Promise((resolve, reject) => {
-    execFile("gh", args, { cwd, env }, (err, stdout, stderr) => {
+    execFile("gh", args, { cwd, env, maxBuffer: MAX_BUFFER }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(stderr || err.message));
         return;

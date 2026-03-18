@@ -5,6 +5,7 @@
 @source "../../../../packages/ui/src";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant standalone (@media (display-mode: standalone));
 
 @theme inline {
   --color-background: var(--background);

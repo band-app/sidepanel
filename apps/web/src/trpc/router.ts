@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   renameSync,
   unlinkSync,
   writeFileSync,
@@ -330,11 +331,22 @@ const workspacesRouter = t.router({
               // Teardown script failure is non-fatal
             }
 
-            execFileSync(command, ["worktree", "remove", "--force", worktreePath], {
-              cwd: proj.path,
-              env,
-              encoding: "utf-8",
-            });
+            try {
+              execFileSync(command, ["worktree", "remove", "--force", worktreePath], {
+                cwd: proj.path,
+                env,
+                encoding: "utf-8",
+              });
+            } catch {
+              // Worktree may be corrupted (e.g. missing .git file).
+              // Manually remove the directory and prune stale entries.
+              rmSync(worktreePath, { recursive: true, force: true });
+              execFileSync(command, ["worktree", "prune"], {
+                cwd: proj.path,
+                env,
+                encoding: "utf-8",
+              });
+            }
             try {
               execFileSync(command, ["branch", "-D", input.branch], {
                 cwd: proj.path,

@@ -760,7 +760,6 @@ const workspaceRouter = t.router({
 
       const dirents = await readdir(target, { withFileTypes: true });
       const entries = dirents
-        .filter((d) => !d.name.startsWith("."))
         .map((d) => ({
           name: d.name,
           type: d.isDirectory() ? ("directory" as const) : ("file" as const),

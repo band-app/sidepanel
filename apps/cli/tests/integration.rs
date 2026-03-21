@@ -7,15 +7,14 @@ use std::process::{Child, Command, Stdio};
 /// The CLI now delegates all state operations to the web server.
 /// These tests start a real web server (from apps/web/dist), seed it
 /// with a temp HOME, then run CLI commands against it.
-
 struct TestEnv {
-    /// The .band directory (used as BAND_HOME for the CLI)
+    /// The .band directory (used as `BAND_HOME` for the CLI)
     band_dir: PathBuf,
     /// The fake HOME directory (parent of .band, used as HOME for the server)
     _home_dir: PathBuf,
     repo_path: PathBuf,
     server_process: Child,
-    _tmp: tempfile::TempDir,
+    tmp: tempfile::TempDir,
 }
 
 impl TestEnv {
@@ -37,20 +36,8 @@ impl TestEnv {
         git(&repo_path, &["init", "-b", "main"]);
         git(&repo_path, &["commit", "--allow-empty", "-m", "init"]);
 
-        // Seed state.json with this project
-        let state = serde_json::json!({
-            "projects": [{
-                "name": "my-project",
-                "path": repo_path.to_string_lossy(),
-                "defaultBranch": "main",
-                "worktrees": []
-            }]
-        });
-        fs::write(
-            band_dir.join("state.json"),
-            serde_json::to_string_pretty(&state).unwrap(),
-        )
-        .unwrap();
+        // Seed SQLite database with migrations and project data
+        seed_db(&band_dir, &repo_path);
 
         // Find a free port
         let port = {
@@ -106,7 +93,7 @@ impl TestEnv {
             _home_dir: home_dir,
             repo_path,
             server_process: child,
-            _tmp: tmp,
+            tmp,
         }
     }
 
@@ -130,8 +117,7 @@ impl TestEnv {
     }
 
     fn state_json(&self) -> serde_json::Value {
-        let data = fs::read_to_string(self.band_dir.join("state.json")).unwrap();
-        serde_json::from_str(&data).unwrap()
+        query_state(&self.band_dir)
     }
 }
 
@@ -140,6 +126,186 @@ impl Drop for TestEnv {
         let _ = self.server_process.kill();
         let _ = self.server_process.wait();
     }
+}
+
+/// Seed the `SQLite` database with Drizzle migrations and a test project.
+///
+/// Runs the raw SQL migration files, creates the `__drizzle_migrations`
+/// journal so the web server treats them as already applied, and inserts
+/// the test project row.
+fn seed_db(band_dir: &Path, repo_path: &Path) {
+    use std::fmt::Write as FmtWrite;
+    use std::io::Write;
+
+    let db_path = band_dir.join("band.db");
+    let migrations_dir =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/web/src/lib/db/migrations");
+
+    // Collect and sort migration SQL files
+    let mut sql_files: Vec<_> = fs::read_dir(&migrations_dir)
+        .expect("read migrations dir")
+        .filter_map(Result::ok)
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "sql"))
+        .collect();
+    sql_files.sort_by_key(std::fs::DirEntry::file_name);
+
+    // Build a single SQL script
+    let mut sql = String::new();
+    sql.push_str("PRAGMA foreign_keys = ON;\n");
+
+    // Create the Drizzle migrations journal table
+    sql.push_str(
+        "CREATE TABLE IF NOT EXISTS \"__drizzle_migrations\" (\n\
+         \tid SERIAL PRIMARY KEY,\n\
+         \thash text NOT NULL,\n\
+         \tcreated_at numeric\n\
+         );\n",
+    );
+
+    // Read the journal metadata once
+    let journal_path = migrations_dir.join("meta/_journal.json");
+    let journal: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&journal_path).unwrap()).unwrap();
+
+    // Apply each migration and register it in the journal
+    for entry in &sql_files {
+        let content = fs::read_to_string(entry.path()).expect("read migration file");
+
+        // Apply the migration SQL (Drizzle uses `--> statement-breakpoint`)
+        sql.push_str(&content.replace("--> statement-breakpoint", ""));
+        sql.push('\n');
+
+        // Compute SHA-256 hash (same algorithm Drizzle uses)
+        let digest = {
+            let hash_output = Command::new("shasum")
+                .args(["-a", "256"])
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .and_then(|mut child| {
+                    child
+                        .stdin
+                        .take()
+                        .unwrap()
+                        .write_all(content.as_bytes())
+                        .unwrap();
+                    child.wait_with_output()
+                })
+                .expect("shasum failed");
+            String::from_utf8_lossy(&hash_output.stdout)
+                .split_whitespace()
+                .next()
+                .unwrap()
+                .to_string()
+        };
+
+        // Use the timestamp from the journal metadata for this migration
+        let tag = entry
+            .path()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+        let when = journal["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["tag"].as_str() == Some(&tag))
+            .and_then(|e| e["when"].as_i64())
+            .expect("migration not in journal");
+
+        let _ = writeln!(
+            sql,
+            "INSERT INTO \"__drizzle_migrations\" (hash, created_at) VALUES ('{digest}', {when});"
+        );
+    }
+
+    // Seed the test project
+    let _ = writeln!(
+        sql,
+        "INSERT INTO projects (name, path, default_branch, sort_order) \
+         VALUES ('my-project', '{}', 'main', 0);",
+        repo_path.to_string_lossy().replace('\'', "''")
+    );
+
+    let output = Command::new("sqlite3")
+        .arg(&db_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(sql.as_bytes())
+                .unwrap();
+            child.wait_with_output()
+        })
+        .expect("sqlite3 command failed");
+
+    assert!(
+        output.status.success(),
+        "sqlite3 seed failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// Query the `SQLite` database and return state in the same shape as the old state.json.
+fn query_state(band_dir: &Path) -> serde_json::Value {
+    let db_path = band_dir.join("band.db");
+
+    // Query projects
+    let output = Command::new("sqlite3")
+        .args([
+            db_path.to_str().unwrap(),
+            "-json",
+            "SELECT name, path, default_branch as defaultBranch FROM projects ORDER BY sort_order",
+        ])
+        .output()
+        .expect("sqlite3 query failed");
+    let projects_raw = String::from_utf8_lossy(&output.stdout);
+    let projects: Vec<serde_json::Value> = if projects_raw.trim().is_empty() {
+        vec![]
+    } else {
+        serde_json::from_str(&projects_raw).expect("parse projects json")
+    };
+
+    // Query worktrees
+    let output = Command::new("sqlite3")
+        .args([
+            db_path.to_str().unwrap(),
+            "-json",
+            "SELECT project_name as projectName, branch, path, head FROM worktrees",
+        ])
+        .output()
+        .expect("sqlite3 query failed");
+    let wt_raw = String::from_utf8_lossy(&output.stdout);
+    let worktrees: Vec<serde_json::Value> = if wt_raw.trim().is_empty() {
+        vec![]
+    } else {
+        serde_json::from_str(&wt_raw).expect("parse worktrees json")
+    };
+
+    // Assemble into state.json shape
+    let projects_with_wt: Vec<serde_json::Value> = projects
+        .into_iter()
+        .map(|mut p| {
+            let name = p["name"].as_str().unwrap().to_string();
+            let project_wts: Vec<&serde_json::Value> = worktrees
+                .iter()
+                .filter(|wt| wt["projectName"].as_str() == Some(&name))
+                .collect();
+            p.as_object_mut()
+                .unwrap()
+                .insert("worktrees".to_string(), serde_json::json!(project_wts));
+            p
+        })
+        .collect();
+
+    serde_json::json!({ "projects": projects_with_wt })
 }
 
 fn git(dir: &Path, args: &[&str]) {
@@ -184,7 +350,7 @@ fn projects_add_registers_new_project() {
     let env = TestEnv::new();
 
     // Create a new git repo to add
-    let new_repo = env._tmp.path().join("new-project");
+    let new_repo = env.tmp.path().join("new-project");
     fs::create_dir_all(&new_repo).unwrap();
     git(&new_repo, &["init", "-b", "main"]);
     git(&new_repo, &["commit", "--allow-empty", "-m", "init"]);
@@ -212,7 +378,7 @@ fn projects_remove_unregisters_project() {
     let env = TestEnv::new();
 
     // First add a new project
-    let new_repo = env._tmp.path().join("to-remove");
+    let new_repo = env.tmp.path().join("to-remove");
     fs::create_dir_all(&new_repo).unwrap();
     git(&new_repo, &["init", "-b", "main"]);
     git(&new_repo, &["commit", "--allow-empty", "-m", "init"]);
@@ -408,10 +574,16 @@ fn setup_script_runs_on_create() {
     assert!(output.status.success(), "stderr: {}", stderr(&output));
 
     let path = stdout(&output);
-    assert!(
-        Path::new(&path).join("setup-ran.txt").exists(),
-        "setup script should have created setup-ran.txt"
-    );
+    // Setup runs asynchronously on the server; poll until the marker file appears.
+    let marker = Path::new(&path).join("setup-ran.txt");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !marker.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "setup script should have created setup-ran.txt"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 #[test]
@@ -438,10 +610,15 @@ fn teardown_script_runs_on_remove() {
     let output = env.band(&["workspaces", "remove", "my-project", "feat/teardown"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
 
-    assert!(
-        marker_path.exists(),
-        "teardown script should have created marker"
-    );
+    // Teardown runs asynchronously on the server; poll until the marker file appears.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !marker_path.exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "teardown script should have created marker"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
 
 #[test]
@@ -1116,7 +1293,7 @@ fn tasks_watch_auto_detect_fails_outside_workspace() {
     let env = TestEnv::new();
 
     // Create a git repo that is NOT a registered workspace
-    let unrelated = env._tmp.path().join("unrelated-repo");
+    let unrelated = env.tmp.path().join("unrelated-repo");
     fs::create_dir_all(&unrelated).unwrap();
     git(&unrelated, &["init", "-b", "main"]);
     git(&unrelated, &["commit", "--allow-empty", "-m", "init"]);
@@ -1564,12 +1741,10 @@ impl MockSseServer {
 
 /// Build SSE data from a list of JSON chunks.
 fn build_sse(chunks: &[serde_json::Value]) -> String {
+    use std::fmt::Write;
     let mut buf = String::new();
     for chunk in chunks {
-        buf.push_str(&format!(
-            "data: {}\n\n",
-            serde_json::to_string(chunk).unwrap()
-        ));
+        let _ = write!(buf, "data: {}\n\n", serde_json::to_string(chunk).unwrap());
     }
     buf
 }
@@ -1781,7 +1956,7 @@ fn watch_render_data_result_with_duration_and_cost() {
         serde_json::json!({
             "type": "data-result",
             "data": {
-                "durationMs": 125000,
+                "durationMs": 125_000,
                 "costUsd": 0.42,
                 "numTurns": 12
             }
@@ -2067,7 +2242,7 @@ fn watch_render_data_result_without_optional_fields() {
         "expected duration only: {err}"
     );
     // Should NOT contain cost or turns when not provided
-    assert!(!err.contains("$"), "no cost expected: {err}");
+    assert!(!err.contains('$'), "no cost expected: {err}");
     assert!(!err.contains("turns"), "no turns expected: {err}");
 }
 

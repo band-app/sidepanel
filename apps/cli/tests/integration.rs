@@ -130,125 +130,22 @@ impl Drop for TestEnv {
 
 /// Seed the `SQLite` database with Drizzle migrations and a test project.
 ///
-/// Runs the raw SQL migration files, creates the `__drizzle_migrations`
-/// journal so the web server treats them as already applied, and inserts
-/// the test project row.
+/// Runs a Node.js script that uses `better-sqlite3` (from the web app's
+/// `node_modules`) to apply migrations and insert seed data.
 fn seed_db(band_dir: &Path, repo_path: &Path) {
-    use std::fmt::Write as FmtWrite;
-    use std::io::Write;
-
-    let db_path = band_dir.join("band.db");
-    let migrations_dir =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/web/src/lib/db/migrations");
-
-    // Collect and sort migration SQL files
-    let mut sql_files: Vec<_> = fs::read_dir(&migrations_dir)
-        .expect("read migrations dir")
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "sql"))
-        .collect();
-    sql_files.sort_by_key(std::fs::DirEntry::file_name);
-
-    // Build a single SQL script
-    let mut sql = String::new();
-    sql.push_str("PRAGMA foreign_keys = ON;\n");
-
-    // Create the Drizzle migrations journal table
-    sql.push_str(
-        "CREATE TABLE IF NOT EXISTS \"__drizzle_migrations\" (\n\
-         \tid SERIAL PRIMARY KEY,\n\
-         \thash text NOT NULL,\n\
-         \tcreated_at numeric\n\
-         );\n",
-    );
-
-    // Read the journal metadata once
-    let journal_path = migrations_dir.join("meta/_journal.json");
-    let journal: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&journal_path).unwrap()).unwrap();
-
-    // Apply each migration and register it in the journal
-    for entry in &sql_files {
-        let content = fs::read_to_string(entry.path()).expect("read migration file");
-
-        // Apply the migration SQL (Drizzle uses `--> statement-breakpoint`)
-        sql.push_str(&content.replace("--> statement-breakpoint", ""));
-        sql.push('\n');
-
-        // Compute SHA-256 hash (same algorithm Drizzle uses)
-        let digest = {
-            let hash_output = Command::new("shasum")
-                .args(["-a", "256"])
-                .stdin(Stdio::piped())
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .and_then(|mut child| {
-                    child
-                        .stdin
-                        .take()
-                        .unwrap()
-                        .write_all(content.as_bytes())
-                        .unwrap();
-                    child.wait_with_output()
-                })
-                .expect("shasum failed");
-            String::from_utf8_lossy(&hash_output.stdout)
-                .split_whitespace()
-                .next()
-                .unwrap()
-                .to_string()
-        };
-
-        // Use the timestamp from the journal metadata for this migration
-        let tag = entry
-            .path()
-            .file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
-        let when = journal["entries"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|e| e["tag"].as_str() == Some(&tag))
-            .and_then(|e| e["when"].as_i64())
-            .expect("migration not in journal");
-
-        let _ = writeln!(
-            sql,
-            "INSERT INTO \"__drizzle_migrations\" (hash, created_at) VALUES ('{digest}', {when});"
-        );
-    }
-
-    // Seed the test project
-    let _ = writeln!(
-        sql,
-        "INSERT INTO projects (name, path, default_branch, sort_order) \
-         VALUES ('my-project', '{}', 'main', 0);",
-        repo_path.to_string_lossy().replace('\'', "''")
-    );
-
-    let output = Command::new("sqlite3")
-        .arg(&db_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .and_then(|mut child| {
-            child
-                .stdin
-                .take()
-                .unwrap()
-                .write_all(sql.as_bytes())
-                .unwrap();
-            child.wait_with_output()
-        })
-        .expect("sqlite3 command failed");
+    let seed_script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/seed-db.mjs");
+    let output = Command::new("node")
+        .arg(&seed_script)
+        .arg(band_dir)
+        .arg("my-project")
+        .arg(repo_path)
+        .arg("main")
+        .output()
+        .expect("seed-db.mjs failed to execute");
 
     assert!(
         output.status.success(),
-        "sqlite3 seed failed: {}",
+        "seed-db.mjs failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
 }
@@ -256,56 +153,41 @@ fn seed_db(band_dir: &Path, repo_path: &Path) {
 /// Query the `SQLite` database and return state in the same shape as the old state.json.
 fn query_state(band_dir: &Path) -> serde_json::Value {
     let db_path = band_dir.join("band.db");
+    let script = format!(
+        r#"
+        const Database = (await import("{bsqlite}")).default;
+        const db = new Database("{db}");
+        const projects = db.prepare(
+            "SELECT name, path, default_branch as defaultBranch FROM projects ORDER BY sort_order"
+        ).all();
+        const worktrees = db.prepare(
+            "SELECT project_name as projectName, branch, path, head FROM worktrees"
+        ).all();
+        for (const p of projects) {{
+            p.worktrees = worktrees.filter(w => w.projectName === p.name);
+        }}
+        console.log(JSON.stringify({{ projects }}));
+        db.close();
+        "#,
+        bsqlite = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../apps/web/node_modules/better-sqlite3/lib/index.js")
+            .to_string_lossy()
+            .replace('\\', "/"),
+        db = db_path.to_string_lossy().replace('\\', "/"),
+    );
 
-    // Query projects
-    let output = Command::new("sqlite3")
-        .args([
-            db_path.to_str().unwrap(),
-            "-json",
-            "SELECT name, path, default_branch as defaultBranch FROM projects ORDER BY sort_order",
-        ])
+    let output = Command::new("node")
+        .args(["--input-type=module", "-e", &script])
         .output()
-        .expect("sqlite3 query failed");
-    let projects_raw = String::from_utf8_lossy(&output.stdout);
-    let projects: Vec<serde_json::Value> = if projects_raw.trim().is_empty() {
-        vec![]
-    } else {
-        serde_json::from_str(&projects_raw).expect("parse projects json")
-    };
+        .expect("node query failed");
 
-    // Query worktrees
-    let output = Command::new("sqlite3")
-        .args([
-            db_path.to_str().unwrap(),
-            "-json",
-            "SELECT project_name as projectName, branch, path, head FROM worktrees",
-        ])
-        .output()
-        .expect("sqlite3 query failed");
-    let wt_raw = String::from_utf8_lossy(&output.stdout);
-    let worktrees: Vec<serde_json::Value> = if wt_raw.trim().is_empty() {
-        vec![]
-    } else {
-        serde_json::from_str(&wt_raw).expect("parse worktrees json")
-    };
+    assert!(
+        output.status.success(),
+        "query_state failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-    // Assemble into state.json shape
-    let projects_with_wt: Vec<serde_json::Value> = projects
-        .into_iter()
-        .map(|mut p| {
-            let name = p["name"].as_str().unwrap().to_string();
-            let project_wts: Vec<&serde_json::Value> = worktrees
-                .iter()
-                .filter(|wt| wt["projectName"].as_str() == Some(&name))
-                .collect();
-            p.as_object_mut()
-                .unwrap()
-                .insert("worktrees".to_string(), serde_json::json!(project_wts));
-            p
-        })
-        .collect();
-
-    serde_json::json!({ "projects": projects_with_wt })
+    serde_json::from_str(&String::from_utf8_lossy(&output.stdout)).expect("parse state json")
 }
 
 fn git(dir: &Path, args: &[&str]) {

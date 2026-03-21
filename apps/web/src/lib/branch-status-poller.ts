@@ -142,6 +142,10 @@ async function getBatchedCIStatuses(workspaces: WorkspaceInfo[]): Promise<Map<st
       const repoInfo = await resolveRepoInfo(ws.projectPath);
       if (repoInfo) {
         resolved.push({ ws, repoInfo, alias: `ws_${index}` });
+      } else {
+        console.error(
+          `CI poll: failed to resolve repo info for ${ws.workspaceId} (${ws.projectPath})`,
+        );
       }
     }),
   );
@@ -195,8 +199,11 @@ async function getBatchedCIStatuses(workspaces: WorkspaceInfo[]): Promise<Map<st
           allResults.set(g.ws.workspaceId, status);
         }
       }
-    } catch {
-      // GraphQL failed for this host — leave workspaces as "none"
+    } catch (err) {
+      console.error(
+        `CI poll: GraphQL query failed for host (${group.length} workspaces):`,
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 

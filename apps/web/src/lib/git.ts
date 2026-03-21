@@ -39,8 +39,16 @@ export function parseGitRemoteUrl(url: string): RepoInfo | null {
 export async function getRepoInfo(worktreePath: string): Promise<RepoInfo | null> {
   try {
     const remoteUrl = (await execGit(["remote", "get-url", "origin"], worktreePath)).trim();
-    return parseGitRemoteUrl(remoteUrl);
-  } catch {
+    const parsed = parseGitRemoteUrl(remoteUrl);
+    if (!parsed) {
+      console.error(`getRepoInfo: failed to parse remote URL "${remoteUrl}" for ${worktreePath}`);
+    }
+    return parsed;
+  } catch (err) {
+    console.error(
+      `getRepoInfo: failed for ${worktreePath}:`,
+      err instanceof Error ? err.message : err,
+    );
     return null;
   }
 }

@@ -136,6 +136,16 @@ const projectsRouter = t.router({
         throw new Error(`Project "${name}" already registered`);
       }
 
+      if (input.label) {
+        const settings = loadSettings();
+        const validIds = (settings.labels ?? []).map((l) => l.id);
+        if (!validIds.includes(input.label)) {
+          throw new Error(
+            `Label "${input.label}" does not exist. Valid labels: ${validIds.join(", ") || "(none)"}`,
+          );
+        }
+      }
+
       let defaultBranch = "main";
       try {
         const env = { ...process.env };

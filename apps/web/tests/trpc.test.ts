@@ -177,7 +177,13 @@ describe("tRPC — projects CRUD", () => {
     repoPath = createGitRepo(tmpHome, "myrepo");
     secondRepoPath = createGitRepo(tmpHome, "second-repo");
     seedState(tmpHome, { projects: [] });
-    seedSettings(tmpHome, { tokenSecret: DEFAULT_TOKEN });
+    seedSettings(tmpHome, {
+      tokenSecret: DEFAULT_TOKEN,
+      labels: [
+        { id: "lbl_work", name: "Work", color: "#3b82f6" },
+        { id: "lbl_personal", name: "Personal", color: "#8b5cf6" },
+      ],
+    });
     server = await startServer({ tmpHome });
   });
 
@@ -191,7 +197,7 @@ describe("tRPC — projects CRUD", () => {
     expect(res.status).toBe(200);
     const data = await trpcData<{ projects: unknown[]; labels: unknown[] }>(res);
     expect(data.projects).toEqual([]);
-    expect(data.labels).toEqual([]);
+    expect(data.labels).toHaveLength(2);
   });
 
   it("projects.add registers a new project", async () => {
@@ -208,15 +214,25 @@ describe("tRPC — projects CRUD", () => {
     expect(res.status).toBe(500);
   });
 
-  it("projects.add registers a second project with a label", async () => {
+  it("projects.add rejects a non-existing label", async () => {
     const res = await trpcMutate(server.url, "projects.add", {
       path: secondRepoPath,
-      label: "Work",
+      label: "nonexistent",
+    });
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error.message).toContain("does not exist");
+  });
+
+  it("projects.add registers a second project with a valid label", async () => {
+    const res = await trpcMutate(server.url, "projects.add", {
+      path: secondRepoPath,
+      label: "lbl_work",
     });
     expect(res.status).toBe(200);
     const data = await trpcData<{ name: string; label?: string }>(res);
     expect(data.name).toBe("second-repo");
-    expect(data.label).toBe("Work");
+    expect(data.label).toBe("lbl_work");
   });
 
   it("projects.list returns both projects", async () => {

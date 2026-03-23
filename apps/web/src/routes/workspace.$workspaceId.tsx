@@ -61,22 +61,28 @@ export function useFindInFileContext() {
 
 function useAppHeight() {
   const [height, setHeight] = useState<number | null>(null);
+  const [offsetTop, setOffsetTop] = useState(0);
   useLayoutEffect(() => {
     const vv = window.visualViewport;
-    const update = () => setHeight(vv ? vv.height : window.innerHeight);
+    const update = () => {
+      setHeight(vv ? vv.height : window.innerHeight);
+      setOffsetTop(vv ? vv.offsetTop : 0);
+    };
     update();
     if (vv) {
       vv.addEventListener("resize", update);
+      vv.addEventListener("scroll", update);
     }
     window.addEventListener("resize", update);
     return () => {
       if (vv) {
         vv.removeEventListener("resize", update);
+        vv.removeEventListener("scroll", update);
       }
       window.removeEventListener("resize", update);
     };
   }, []);
-  return height;
+  return { height, offsetTop };
 }
 
 function useActiveTab(workspaceId: string): WorkspaceTab {
@@ -306,7 +312,7 @@ function MobileWorkspaceLayout({
   const activeTab = useActiveTab(encodedId);
   const diffFileCount = useDiffFileCount(workspaceId);
   const navigate = useNavigate();
-  const appHeight = useAppHeight();
+  const { height: appHeight, offsetTop: appOffsetTop } = useAppHeight();
   const isTasksWindow = useRef<boolean | null>(null);
   const [supportsSessionListing, setSupportsSessionListing] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
@@ -359,7 +365,10 @@ function MobileWorkspaceLayout({
     >
       <div
         className="flex flex-col overflow-hidden"
-        style={{ height: appHeight ? `${appHeight}px` : "100dvh" }}
+        style={{
+          height: appHeight ? `${appHeight}px` : "100dvh",
+          transform: appOffsetTop ? `translateY(${appOffsetTop}px)` : undefined,
+        }}
       >
         <header className="flex shrink-0 items-center gap-3 border-b border-border/50 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <button

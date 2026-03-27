@@ -1,5 +1,33 @@
-import { listWorktrees } from "./git";
+import { execGit, listWorktrees } from "./git";
 import { loadState, saveState, type WorktreeState } from "./state";
+
+/**
+ * Detect the remote's default branch from the local origin/HEAD ref.
+ * Returns null if the ref doesn't exist (e.g. origin/HEAD was never set).
+ */
+async function detectRemoteDefaultBranch(projectPath: string): Promise<string | null> {
+  try {
+    const ref = (await execGit(["symbolic-ref", "refs/remotes/origin/HEAD"], projectPath)).trim();
+    // ref is like "refs/remotes/origin/main" — extract the branch name
+    const prefix = "refs/remotes/origin/";
+    if (ref.startsWith(prefix)) {
+      return ref.slice(prefix.length);
+    }
+  } catch {
+    // origin/HEAD not set — try to auto-detect it (one-time network call)
+    try {
+      await execGit(["remote", "set-head", "origin", "--auto"], projectPath);
+      const ref = (await execGit(["symbolic-ref", "refs/remotes/origin/HEAD"], projectPath)).trim();
+      const prefix = "refs/remotes/origin/";
+      if (ref.startsWith(prefix)) {
+        return ref.slice(prefix.length);
+      }
+    } catch {
+      // No remote or network unavailable — skip
+    }
+  }
+  return null;
+}
 
 export async function syncWorktrees(): Promise<void> {
   const state = loadState();
@@ -25,6 +53,13 @@ export async function syncWorktrees(): Promise<void> {
       Array.from(existingSet).some((key) => !diskSet.has(key))
     ) {
       project.worktrees = diskWorktrees;
+      changed = true;
+    }
+
+    // Sync default branch with remote's HEAD
+    const remoteBranch = await detectRemoteDefaultBranch(project.path);
+    if (remoteBranch && remoteBranch !== project.defaultBranch) {
+      project.defaultBranch = remoteBranch;
       changed = true;
     }
   }

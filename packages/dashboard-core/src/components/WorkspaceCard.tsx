@@ -125,26 +125,26 @@ export const WorkspaceCard = memo(function WorkspaceCard({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div {...containerProps}>
-          <div className="flex flex-1 items-center gap-3 min-w-0 overflow-hidden">
-            <GitBranch
-              className={`size-3.5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
-            />
-            <Tooltip>
-              <TooltipTrigger asChild>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+                <GitBranch
+                  className={`size-3.5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+                />
                 <span
                   className={`text-sm truncate ${isActive ? "font-semibold text-foreground" : "font-medium"}`}
                   style={isActive ? undefined : { color: "oklch(0.7 0 0)" }}
                 >
                   {worktree.branch}
                 </span>
-              </TooltipTrigger>
-              <TooltipContent side="top">{worktree.branch}</TooltipContent>
-            </Tooltip>
-            {!editMode && <AgentStatusBadge agent={status?.agent} />}
-            {!editMode && <SetupStatusIndicator setup={setupStatus} />}
-          </div>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top">{worktree.branch}</TooltipContent>
+          </Tooltip>
           {!editMode && (
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 ml-auto pl-2">
+              <AgentStatusBadge agent={status?.agent} />
+              <SetupStatusIndicator setup={setupStatus} />
               {branchStatus && <GitStatusIndicator git={branchStatus.git} />}
               {branchStatus && <CIStatusIndicator ci={branchStatus.ci} />}
             </div>

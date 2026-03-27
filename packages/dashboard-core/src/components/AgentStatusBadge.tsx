@@ -16,7 +16,7 @@ export function AgentStatusBadge({ agent }: Props) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`inline-block size-2 rounded-full ${color}`} />
+        <span className={`inline-block size-2 shrink-0 rounded-full ${color}`} />
       </TooltipTrigger>
       <TooltipContent side="top">{tooltip}</TooltipContent>
     </Tooltip>

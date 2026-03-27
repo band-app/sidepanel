@@ -858,14 +858,18 @@ function historyToolToItem(
   tool: HistoryMessageContent,
   result: HistoryMessageContent | undefined,
 ): ToolCallItem {
+  const toolName = tool.toolName ?? "unknown";
+  // If an AskUserQuestion has no result, the agent is still waiting for an answer
+  const isUnanswered = toolName === "AskUserQuestion" && !result;
   return {
     toolCallId: tool.toolCallId ?? "",
-    toolName: tool.toolName ?? "unknown",
+    toolName,
     input: tool.input,
     output: result?.output,
     errorText: result?.isError ? (result.output ?? undefined) : undefined,
     isError: result?.isError ?? false,
-    isInProgress: false,
+    isInProgress: isUnanswered,
+    approvalId: isUnanswered ? (tool.toolCallId ?? undefined) : undefined,
   };
 }
 

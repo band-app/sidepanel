@@ -55,14 +55,23 @@ function NotFound() {
   );
 }
 
+/** Blocking script injected into <head> to apply the theme before first paint.
+ *  Reads a cached theme value from localStorage (written by ThemeSync). */
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem("band-theme")||"dark";var d=document.documentElement;if(t==="system"){if(window.matchMedia("(prefers-color-scheme:dark)").matches)d.classList.add("dark");else d.classList.remove("dark")}else if(t==="dark"){d.classList.add("dark")}else{d.classList.remove("dark")}}catch(e){document.documentElement.classList.add("dark")}})()`;
+
 /** Syncs the "dark" class on <html> with the persisted theme setting.
- *  Runs for ALL pages (including standalone Tauri windows like tasks/cronjobs). */
+ *  Runs for ALL pages (including standalone Tauri windows like tasks/cronjobs).
+ *  Also caches the theme in localStorage so the blocking script can use it. */
 function ThemeSync() {
   const { settings } = useSettingsQuery();
-  const theme = settings.theme ?? "system";
+  const theme = settings.theme ?? "dark";
 
   useEffect(() => {
     const root = document.documentElement;
+
+    try {
+      localStorage.setItem("band-theme", theme);
+    } catch {}
 
     const apply = (isDark: boolean) => {
       if (isDark) {
@@ -121,6 +130,8 @@ function RootLayout() {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static inline script to prevent theme flash */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body>
         <DashboardProvider adapter={adapter} capabilities={capabilities}>

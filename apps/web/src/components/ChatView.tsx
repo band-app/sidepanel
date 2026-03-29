@@ -641,7 +641,7 @@ export function ChatView({
 
       <div className="mx-auto w-full max-w-3xl shrink-0 px-3 lg:px-4 pt-2 pb-4 standalone:pb-[env(safe-area-inset-bottom)]">
         <TaskListWidget tasks={displayTaskMap} />
-        <PromptInput onSubmit={handleSubmit}>
+        <PromptInput onSubmit={handleSubmit} draftKey={workspaceId}>
           <SlashCommandSuggestions skills={skills} />
           <PromptInputTextarea
             placeholder="Type a message..."

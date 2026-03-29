@@ -11,7 +11,7 @@ import type {
   ReactNode,
   RefObject,
 } from "react";
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 let fileIdCounter = 0;
 
@@ -45,16 +45,52 @@ export interface PromptInputMessage {
 
 export type PromptInputProps = Omit<HTMLAttributes<HTMLFormElement>, "onSubmit"> & {
   onSubmit: (message: PromptInputMessage, event: FormEvent<HTMLFormElement>) => void;
+  /** When set, the unsent input text is persisted to sessionStorage under this key so it survives unmounts (e.g. tab switches). */
+  draftKey?: string;
 };
 
-export const PromptInput = ({ className, onSubmit, children, ...props }: PromptInputProps) => {
+function readDraft(key: string | null): string {
+  if (!key) return "";
+  try {
+    return sessionStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export const PromptInput = ({
+  className,
+  onSubmit,
+  draftKey,
+  children,
+  ...props
+}: PromptInputProps) => {
   const formRef = useRef<HTMLFormElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [fileEntries, setFileEntries] = useState<FileEntry[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [hasText, setHasText] = useState(false);
-  const [inputValue, setInputValue] = useState("");
+  const draftStorageKey = draftKey ? `band-draft:${draftKey}` : null;
+  const [hasText, setHasText] = useState(() => readDraft(draftStorageKey).length > 0);
+  const [inputValue, setInputValue] = useState(() => readDraft(draftStorageKey));
   const [commandHint, setCommandHint] = useState<string | null>(null);
+
+  // Restore draft into the uncontrolled textarea on mount
+  const draftRestoredRef = useRef(false);
+  useEffect(() => {
+    if (draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+    const draft = readDraft(draftStorageKey);
+    if (!draft) return;
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      HTMLTextAreaElement.prototype,
+      "value",
+    )?.set;
+    nativeSetter?.call(textarea, draft);
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    textarea.selectionStart = textarea.selectionEnd = draft.length;
+  }, [draftStorageKey]);
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const valid = Array.from(newFiles).filter((f) => f.size <= MAX_FILE_SIZE);
@@ -79,8 +115,9 @@ export const PromptInput = ({ className, onSubmit, children, ...props }: PromptI
       setHasText(false);
       setInputValue("");
       setCommandHint(null);
+      if (draftStorageKey) sessionStorage.removeItem(draftStorageKey);
     },
-    [onSubmit, fileEntries],
+    [onSubmit, fileEntries, draftStorageKey],
   );
 
   const handleDragOver = useCallback((e: DragEvent) => {
@@ -117,10 +154,20 @@ export const PromptInput = ({ className, onSubmit, children, ...props }: PromptI
     [addFiles],
   );
 
-  const handleInputChange = useCallback((value: string) => {
-    setInputValue(value);
-    setHasText(value.trim().length > 0);
-  }, []);
+  const handleInputChange = useCallback(
+    (value: string) => {
+      setInputValue(value);
+      setHasText(value.trim().length > 0);
+      if (draftStorageKey) {
+        if (value) {
+          sessionStorage.setItem(draftStorageKey, value);
+        } else {
+          sessionStorage.removeItem(draftStorageKey);
+        }
+      }
+    },
+    [draftStorageKey],
+  );
 
   const setTextareaValue = useCallback((value: string) => {
     const textarea = textareaRef.current;
@@ -174,7 +221,7 @@ export const PromptInput = ({ className, onSubmit, children, ...props }: PromptI
 interface PromptInputContextValue {
   addFiles: (files: FileList | File[]) => void;
   hasContent: boolean;
-  onTextChange: (hasText: boolean) => void;
+  onTextChange: (value: string) => void;
   inputValue: string;
   textareaRef: RefObject<HTMLTextAreaElement | null>;
   setTextareaValue: (value: string) => void;

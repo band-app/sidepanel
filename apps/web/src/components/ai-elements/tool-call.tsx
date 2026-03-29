@@ -3,6 +3,7 @@ import { ChevronDownIcon } from "lucide-react";
 
 import { AskUserQuestion } from "./ask-user-question";
 import { MessageResponse } from "./message";
+import { PlanApproval } from "./plan-approval";
 import { ToolInput, ToolOutput } from "./tool";
 
 function extractMarkdown(item: ToolCallItem): string | null {
@@ -69,6 +70,16 @@ export function ToolCall({ item }: { item: ToolCallItem }) {
     return (
       <div className="not-prose mb-4">
         <AskUserQuestion questions={questions} approvalId={item.approvalId} />
+      </div>
+    );
+  }
+
+  if (item.toolName === "ExitPlanMode" && item.approvalId && item.isInProgress) {
+    const input = item.input as Record<string, unknown> | null | undefined;
+    const plan = typeof input?.plan === "string" ? input.plan : "";
+    return (
+      <div className="not-prose mb-4">
+        <PlanApproval plan={plan} approvalId={item.approvalId} />
       </div>
     );
   }

@@ -78,16 +78,15 @@ export class ClaudeCodeAdapter implements CodingAgent {
       "runSession starting",
     );
 
+    const INTERACTIVE_TOOLS = new Set(["AskUserQuestion", "ExitPlanMode"]);
+
     const canUseTool: CanUseTool = async (toolName, input, options) => {
-      if (toolName !== "AskUserQuestion" || !this.onUserInputNeeded) {
+      if (!INTERACTIVE_TOOLS.has(toolName) || !this.onUserInputNeeded) {
         return { behavior: "allow", updatedInput: input };
       }
 
       const approvalId = options.toolUseID;
-      log.info(
-        { toolName, approvalId, toolUseID: options.toolUseID },
-        "AskUserQuestion intercepted",
-      );
+      log.info({ toolName, approvalId, toolUseID: options.toolUseID }, `${toolName} intercepted`);
 
       try {
         const answers = await Promise.race([
@@ -104,7 +103,7 @@ export class ClaudeCodeAdapter implements CodingAgent {
 
         return { behavior: "deny", message: formatUserAnswer(answers) };
       } catch (err) {
-        log.warn({ err, approvalId }, "AskUserQuestion timed out or errored, auto-allowing");
+        log.warn({ err, approvalId }, `${toolName} timed out or errored, auto-allowing`);
         return { behavior: "allow", updatedInput: input };
       }
     };

@@ -56,10 +56,14 @@ function toolPartToItem(part: ToolPart): ToolCallItem {
     errorText: part.errorText,
     isError: ERROR_STATES.has(part.state),
     isInProgress: IN_PROGRESS_STATES.has(part.state),
-    // AskUserQuestion uses toolCallId as the approval key since the
-    // canUseTool callback in the agent adapter manages the pending-input
-    // lifecycle directly (not through the AI SDK approval mechanism).
-    approvalId: toolName === "AskUserQuestion" ? part.toolCallId : approval?.id,
+    // Interactive tools (AskUserQuestion, ExitPlanMode) use toolCallId as
+    // the approval key since the canUseTool callback in the agent adapter
+    // manages the pending-input lifecycle directly (not through the AI SDK
+    // approval mechanism).
+    approvalId:
+      toolName === "AskUserQuestion" || toolName === "ExitPlanMode"
+        ? part.toolCallId
+        : approval?.id,
   };
 }
 
@@ -859,8 +863,9 @@ function historyToolToItem(
   result: HistoryMessageContent | undefined,
 ): ToolCallItem {
   const toolName = tool.toolName ?? "unknown";
-  // If an AskUserQuestion has no result, the agent is still waiting for an answer
-  const isUnanswered = toolName === "AskUserQuestion" && !result;
+  // Interactive tools without a result are still waiting for user input
+  const isInteractive = toolName === "AskUserQuestion" || toolName === "ExitPlanMode";
+  const isUnanswered = isInteractive && !result;
   return {
     toolCallId: tool.toolCallId ?? "",
     toolName,

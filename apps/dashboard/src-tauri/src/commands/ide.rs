@@ -500,6 +500,7 @@ pub fn start_focus_polling(app_handle: tauri::AppHandle) {
 #[tauri::command]
 pub fn workspace_focus(
     workspace_id: String,
+    app_handle: tauri::AppHandle,
     active_state: tauri::State<'_, ActiveWorkspaceState>,
     project_cache: tauri::State<'_, ProjectCache>,
 ) -> Result<(), String> {
@@ -558,8 +559,19 @@ pub fn workspace_focus(
     let (screen_width, screen_height) =
         ax_windows::get_screen_size().ok_or("Failed to get screen size")?;
 
+    // Get actual dashboard window width
+    let dashboard_width = app_handle
+        .get_webview_window("main")
+        .and_then(|w| {
+            let scale = w.scale_factor().unwrap_or(1.0);
+            w.outer_size()
+                .ok()
+                .map(|s| (f64::from(s.width) / scale) as i32)
+        })
+        .unwrap_or(400);
+
     // Compute layout for all apps
-    let rects = apps::compute_layout(&app_configs, screen_width, screen_height);
+    let rects = apps::compute_layout(&app_configs, screen_width, screen_height, dashboard_width);
 
     // Open/focus each app in its own thread so slow apps
     // (e.g. iTerm AppleScript) don't block the UI.

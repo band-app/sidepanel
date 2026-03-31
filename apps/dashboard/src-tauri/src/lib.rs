@@ -13,7 +13,6 @@ use commands::webserver::{self as webserver, ManagedProcess, WebServerState};
 use state::{ActiveWorkspaceState, ProjectCache};
 use tauri::Manager;
 
-const DASHBOARD_WIDTH: u32 = 400;
 const MAX_LOG_SIZE: u64 = 5 * 1024 * 1024; // 5 MB
 
 fn log_to_file(msg: &str) {
@@ -113,17 +112,22 @@ pub fn run() {
                 }
             }
 
-            // Position dashboard at left edge, full screen height
+            // Position dashboard at left edge, full screen height (preserve current width)
             if let Ok(Some(monitor)) = window.current_monitor() {
                 let screen_size = monitor.size();
                 let scale_factor = monitor.scale_factor();
                 let screen_height = (f64::from(screen_size.height) / scale_factor) as u32;
 
+                let current_width = window
+                    .outer_size()
+                    .map(|s| (f64::from(s.width) / scale_factor) as u32)
+                    .unwrap_or(400);
+
                 let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(
                     0.0, 0.0,
                 )));
                 let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
-                    f64::from(DASHBOARD_WIDTH),
+                    f64::from(current_width),
                     f64::from(screen_height),
                 )));
             }

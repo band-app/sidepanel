@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::ax_windows;
 
-const DASHBOARD_WIDTH: i32 = 400;
 
 #[derive(Debug, Clone)]
 pub struct ScreenRect {
@@ -298,12 +297,13 @@ pub fn compute_layout(
     apps: &[AppConfig],
     screen_width: i32,
     screen_height: i32,
+    dashboard_width: i32,
 ) -> Vec<ScreenRect> {
     if apps.is_empty() {
         return Vec::new();
     }
 
-    let available_width = screen_width - DASHBOARD_WIDTH;
+    let available_width = screen_width - dashboard_width;
 
     // Group apps into columns.
     // `split: "horizontal"` → join the previous column (stack vertically).
@@ -336,7 +336,7 @@ pub fn compute_layout(
         };
         apps.len()
     ];
-    let mut x = DASHBOARD_WIDTH;
+    let mut x = dashboard_width;
 
     for (col_idx, (col_weight, col_apps)) in columns.iter().enumerate() {
         let col_width = if col_idx == columns.len() - 1 {

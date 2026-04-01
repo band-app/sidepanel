@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::ax_windows;
 
-
 #[derive(Debug, Clone)]
 pub struct ScreenRect {
     pub x: i32,

@@ -11,7 +11,7 @@ export function AgentStatusIndicator({ agent, isActive }: Props) {
   if (!agent || agent.status === "waiting") {
     return (
       <GitBranch
-        className={`size-3.5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+        className={`size-3 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
       />
     );
   }
@@ -23,7 +23,7 @@ export function AgentStatusIndicator({ agent, isActive }: Props) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className={`inline-block size-2.5 shrink-0 rounded-full ${color}`} />
+        <span className={`inline-block size-2 shrink-0 rounded-full ${color}`} />
       </TooltipTrigger>
       <TooltipContent side="top">{tooltip}</TooltipContent>
     </Tooltip>

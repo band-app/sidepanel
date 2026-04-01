@@ -126,7 +126,7 @@ export const WorkspaceCard = memo(function WorkspaceCard({
         <div {...containerProps}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
                 <AgentStatusIndicator agent={status?.agent} isActive={isActive} />
                 <span
                   className={`text-sm truncate ${isActive ? "font-semibold text-foreground" : "font-medium"}`}

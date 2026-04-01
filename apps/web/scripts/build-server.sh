@@ -10,7 +10,7 @@ esbuild start-server.ts \
   --external:./server/server.js \
   --external:node-pty \
   --external:better-sqlite3 \
-  --banner:js="import{createRequire}from'module';import{fileURLToPath as __fu}from'url';import{dirname as __dn}from'path';const require=createRequire(import.meta.url);const __filename=__fu(import.meta.url);const __dirname=__dn(__filename);"
+  --banner:js="import{createRequire as __cr}from'module';import{fileURLToPath as __fu}from'url';import{dirname as __dn}from'path';const require=__cr(import.meta.url);const __filename=__fu(import.meta.url);const __dirname=__dn(__filename);"
 
 # Copy native modules into dist/ for self-contained builds (Tauri app).
 # When building for npm publish, skip this — npm consumers install native

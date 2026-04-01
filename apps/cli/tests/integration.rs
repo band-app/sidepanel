@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Read};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::time::Duration;
 
 /// The CLI now delegates all state operations to the web server.
 /// These tests start a real web server (from apps/web/dist), seed it
@@ -69,18 +70,42 @@ impl TestEnv {
             .spawn()
             .expect("failed to start web server");
 
-        // Wait for "listening" on stdout
+        // Wait for "listening" on stdout with a timeout.
+        // Spawn a reader thread so we can enforce a deadline without blocking
+        // the test forever if the server fails to start.
         let stdout = child.stdout.take().unwrap();
-        let reader = BufReader::new(stdout);
-        let mut found = false;
-        for line in reader.lines() {
-            let line = line.unwrap_or_default();
-            if line.contains("listening") {
-                found = true;
-                break;
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                let line = line.unwrap_or_default();
+                if line.contains("listening") {
+                    let _ = tx.send(true);
+                    return;
+                }
             }
+            let _ = tx.send(false);
+        });
+        let found = rx
+            .recv_timeout(Duration::from_secs(30))
+            .unwrap_or(false);
+        if !found {
+            // Kill server and capture stderr for diagnostics
+            let _ = child.kill();
+            let output = child.wait_with_output().ok();
+            let stderr_output = output
+                .as_ref()
+                .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
+                .unwrap_or_default();
+            panic!(
+                "web server did not emit 'listening' within 30s.\nstderr: {}",
+                if stderr_output.is_empty() {
+                    "(empty)"
+                } else {
+                    &stderr_output
+                }
+            );
         }
-        assert!(found, "web server did not emit 'listening'");
 
         Self {
             band_dir,

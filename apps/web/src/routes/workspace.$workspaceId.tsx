@@ -1,4 +1,5 @@
 import {
+  AgentIcon,
   type DiffStats,
   QuickOpenDialog,
   SearchFilesDialog,
@@ -7,7 +8,7 @@ import {
   WorkspaceTabNav,
 } from "@band-app/dashboard-core";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, Clock, Code, GitCompare, Terminal } from "lucide-react";
+import { ArrowLeft, ChevronDown, Clock, Code, GitCompare, Terminal } from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -18,6 +19,7 @@ import {
   useState,
 } from "react";
 import { WorkspaceChatPanel } from "../components/WorkspaceChatPanel";
+import { AgentSwitcherContext } from "../hooks/useAgentSwitcherContext";
 import { useIsDesktop } from "../hooks/useIsDesktop";
 import { SessionListContext } from "../hooks/useSessionListContext";
 import { isTauri } from "../lib/is-tauri";
@@ -302,6 +304,12 @@ function DesktopWorkspaceLayout({
 // Mobile layout
 // ---------------------------------------------------------------------------
 
+interface CodingAgentDef {
+  id: string;
+  type: string;
+  label: string;
+}
+
 function MobileWorkspaceLayout({
   workspaceId,
   encodedId,
@@ -316,6 +324,13 @@ function MobileWorkspaceLayout({
   const isTasksWindow = useRef<boolean | null>(null);
   const [supportsSessionListing, setSupportsSessionListing] = useState(false);
   const [showSessionList, setShowSessionList] = useState(false);
+
+  // Agent switcher state
+  const [agents, setAgents] = useState<CodingAgentDef[]>([]);
+  const [currentAgentId, setCurrentAgentId] = useState<string>("");
+  const [showAgentMenu, setShowAgentMenu] = useState(false);
+  const [taskRunning, setTaskRunning] = useState(false);
+  const [chatKey, setChatKey] = useState(0);
 
   useEffect(() => {
     if (!isTauri) {
@@ -341,6 +356,64 @@ function MobileWorkspaceLayout({
     };
   }, [workspaceId]);
 
+  // Load available agents from settings and current workspace agent
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chatKey intentionally triggers reload after agent switch; currentAgentId excluded to avoid infinite loop
+  useEffect(() => {
+    let cancelled = false;
+
+    trpc.settings.get.query().then((settings) => {
+      if (cancelled) return;
+      const raw = (settings as Record<string, unknown>).codingAgents;
+      const codingAgents = Array.isArray(raw) ? (raw as CodingAgentDef[]) : [];
+      if (codingAgents.length > 0) {
+        const seen = new Set<string>();
+        const unique = codingAgents.filter((a) => {
+          if (seen.has(a.type)) return false;
+          seen.add(a.type);
+          return true;
+        });
+        setAgents(unique);
+      }
+      const defaultAgent = (settings as Record<string, unknown>).defaultCodingAgent as
+        | string
+        | undefined;
+      if (defaultAgent && !currentAgentId) {
+        setCurrentAgentId(defaultAgent);
+      }
+    });
+
+    trpc.statuses.get
+      .query({ workspaceId })
+      .then((status) => {
+        if (cancelled) return;
+        if (status?.agent?.codingAgentId) {
+          setCurrentAgentId(status.agent.codingAgentId);
+        }
+      })
+      .catch(() => {
+        // Status might not exist yet
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, chatKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSwitchAgent = useCallback(
+    async (agentId: string) => {
+      setShowAgentMenu(false);
+      if (agentId === currentAgentId) return;
+      try {
+        await trpc.workspace.switchAgent.mutate({ workspaceId, agentId });
+        setCurrentAgentId(agentId);
+        setChatKey((k) => k + 1);
+      } catch (err) {
+        console.error("[switchAgent] error:", err);
+      }
+    },
+    [workspaceId, currentAgentId],
+  );
+
   const handleBack = useCallback(() => {
     navigate({ to: isTasksWindow.current ? "/tasks" : "/" });
   }, [navigate]);
@@ -353,6 +426,9 @@ function MobileWorkspaceLayout({
     setShowSessionList(show);
   }, []);
 
+  const currentAgent = agents.find((a) => a.id === currentAgentId);
+  const switchDisabled = taskRunning;
+
   const tabHrefs = {
     chat: `/workspace/${encodedId}`,
     diff: `/workspace/${encodedId}/changes`,
@@ -363,40 +439,93 @@ function MobileWorkspaceLayout({
     <SessionListContext.Provider
       value={{ showSessionList, setShowSessionList: handleSetShowSessionList }}
     >
-      <div
-        className="flex flex-col overflow-hidden"
-        style={{
-          height: appHeight ? `${appHeight}px` : "100dvh",
-          transform: appOffsetTop ? `translateY(${appOffsetTop}px)` : undefined,
-        }}
-      >
-        {isTauri && <div data-tauri-drag-region className="h-[28px] shrink-0" />}
-        <header className="flex shrink-0 items-center gap-3 border-b border-border/50 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-          <button
-            type="button"
-            onClick={handleBack}
-            className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent"
-          >
-            <ArrowLeft className="size-4" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-sm font-semibold">{workspaceId}</h1>
-          </div>
-          {supportsSessionListing && activeTab === "chat" && (
+      <AgentSwitcherContext.Provider value={{ chatKey, setTaskRunning }}>
+        <div
+          className="flex flex-col overflow-hidden"
+          style={{
+            height: appHeight ? `${appHeight}px` : "100dvh",
+            transform: appOffsetTop ? `translateY(${appOffsetTop}px)` : undefined,
+          }}
+        >
+          {isTauri && <div data-tauri-drag-region className="h-[28px] shrink-0" />}
+          <header className="flex shrink-0 items-center gap-3 border-b border-border/50 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
             <button
               type="button"
-              onClick={handleToggleSessionList}
-              className={`inline-flex size-8 items-center justify-center rounded-md transition-colors hover:bg-accent ${showSessionList ? "bg-accent text-foreground" : "text-muted-foreground"}`}
+              onClick={handleBack}
+              className="inline-flex size-8 items-center justify-center rounded-md hover:bg-accent"
             >
-              <Clock className="size-4" />
+              <ArrowLeft className="size-4" />
             </button>
-          )}
-        </header>
-        <WorkspaceTabNav activeTab={activeTab} tabHrefs={tabHrefs} diffFileCount={diffFileCount} />
-        <main className="flex min-h-0 flex-1 flex-col">
-          <Outlet />
-        </main>
-      </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-sm font-semibold">{workspaceId}</h1>
+            </div>
+            {agents.length > 1 && activeTab === "chat" && (
+              <div className="relative">
+                <button
+                  type="button"
+                  disabled={switchDisabled}
+                  onClick={() => setShowAgentMenu((prev) => !prev)}
+                  className={`inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs transition-colors ${
+                    switchDisabled
+                      ? "opacity-50 cursor-not-allowed text-muted-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  }`}
+                >
+                  {currentAgent && (
+                    <AgentIcon type={currentAgent.type} className="size-3.5 shrink-0" />
+                  )}
+                  <span className="max-w-[120px] truncate">{currentAgent?.label ?? "Default"}</span>
+                  <ChevronDown className="size-3 opacity-50" />
+                </button>
+                {showAgentMenu && !switchDisabled && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowAgentMenu(false)}
+                      onKeyDown={() => {}}
+                      role="presentation"
+                    />
+                    <div className="absolute right-0 top-full z-50 mt-1 min-w-[160px] rounded-md border border-border bg-popover p-1 shadow-md">
+                      {agents.map((agent) => (
+                        <button
+                          key={agent.id}
+                          type="button"
+                          className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs transition-colors hover:bg-accent ${
+                            agent.id === currentAgentId
+                              ? "bg-accent text-foreground"
+                              : "text-muted-foreground"
+                          }`}
+                          onClick={() => handleSwitchAgent(agent.id)}
+                        >
+                          <AgentIcon type={agent.type} className="size-3.5 shrink-0" />
+                          {agent.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            {supportsSessionListing && activeTab === "chat" && (
+              <button
+                type="button"
+                onClick={handleToggleSessionList}
+                className={`inline-flex size-8 items-center justify-center rounded-md transition-colors hover:bg-accent ${showSessionList ? "bg-accent text-foreground" : "text-muted-foreground"}`}
+              >
+                <Clock className="size-4" />
+              </button>
+            )}
+          </header>
+          <WorkspaceTabNav
+            activeTab={activeTab}
+            tabHrefs={tabHrefs}
+            diffFileCount={diffFileCount}
+          />
+          <main className="flex min-h-0 flex-1 flex-col">
+            <Outlet />
+          </main>
+        </div>
+      </AgentSwitcherContext.Provider>
     </SessionListContext.Provider>
   );
 }

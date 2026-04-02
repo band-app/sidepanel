@@ -38,6 +38,14 @@ process.on("unhandledRejection", (reason: unknown) => {
   const timestamp = new Date().toISOString();
   const error = reason instanceof Error ? reason.stack || reason.message : String(reason);
   logCrash(`[${timestamp}] Unhandled rejection:\n${error}\n\n`);
+
+  // Don't crash the server for known recoverable SDK transport errors.
+  // The Claude Code SDK can throw "ProcessTransport is not ready for writing"
+  // when a canUseTool callback times out after the agent process has exited.
+  if (reason instanceof Error && reason.message.includes("ProcessTransport is not ready")) {
+    console.error(`[${timestamp}] Recoverable SDK transport error (not crashing):`, reason.message);
+    return;
+  }
   process.exit(1);
 });
 

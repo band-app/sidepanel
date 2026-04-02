@@ -115,6 +115,13 @@ export class ClaudeCodeAdapter implements CodingAgent {
         return { behavior: "deny", message: formatUserAnswer(answers) };
       } catch (err) {
         log.warn({ err, approvalId }, `${toolName} timed out or errored, auto-allowing`);
+        // If the conversation has already been closed (process exited while
+        // waiting for user input), throw instead of returning a response that
+        // the SDK would try to write to the dead transport — which causes an
+        // unhandled "ProcessTransport is not ready for writing" rejection.
+        if (!this.activeConversation) {
+          throw new Error("Conversation closed while waiting for user input");
+        }
         return { behavior: "allow", updatedInput: input };
       }
     };

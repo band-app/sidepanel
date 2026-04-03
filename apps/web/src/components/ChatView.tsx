@@ -7,6 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@band-app/ui";
+import type { UIMessage } from "ai";
 import { getToolName, isToolUIPart } from "ai";
 import { Bot, ChevronDown, Clock, Loader2, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -102,6 +103,89 @@ type QueueSegment = {
 };
 
 /**
+ * Convert history messages (from agent session JSONL files) into UIMessage[]
+ * that can be loaded directly into useChat's setMessages().
+ *
+ * This eliminates the need for a separate "historical messages" store — all
+ * messages flow through the same useChat message array.
+ */
+function convertHistoryToUIMessages(history: HistoryMessage[]): UIMessage[] {
+  // Build a map of tool_result blocks keyed by toolCallId for quick lookup
+  const toolResultMap = new Map<string, HistoryMessageContent>();
+  for (const msg of history) {
+    for (const block of msg.content) {
+      if (block.type === "tool_result" && block.toolCallId) {
+        toolResultMap.set(block.toolCallId, block);
+      }
+    }
+  }
+
+  return history.map((msg) => {
+    const parts: UIMessageParts = [];
+
+    if (msg.role === "user") {
+      const userText = msg.content
+        .filter((b) => b.type === "text" && b.text?.trim())
+        .map((b) => b.text!)
+        .join("\n");
+
+      if (userText) {
+        const { displayText, files } = parseSharedFiles(userText);
+        for (const file of files) {
+          parts.push(file);
+        }
+        if (displayText) {
+          parts.push({ type: "text", text: displayText });
+        }
+      }
+    } else {
+      // Assistant message
+      for (const block of msg.content) {
+        if (block.type === "text" && block.text?.trim()) {
+          parts.push({ type: "text", text: block.text });
+        } else if (block.type === "tool_use") {
+          const callId = block.toolCallId ?? "";
+          const toolName = block.toolName ?? "unknown";
+          const result = toolResultMap.get(callId);
+
+          if (result?.isError) {
+            parts.push({
+              type: "dynamic-tool",
+              toolName,
+              toolCallId: callId,
+              state: "output-error",
+              input: block.input,
+              errorText: result.output ?? "Error",
+            });
+          } else if (result) {
+            parts.push({
+              type: "dynamic-tool",
+              toolName,
+              toolCallId: callId,
+              state: "output-available",
+              input: block.input,
+              output: result.output,
+            });
+          } else {
+            // No result — tool is still waiting for input/completion
+            parts.push({
+              type: "dynamic-tool",
+              toolName,
+              toolCallId: callId,
+              state: "input-available",
+              input: block.input,
+            });
+          }
+        }
+        // tool_result blocks are consumed above via toolResultMap — skip them
+      }
+    }
+
+    return { id: msg.id, role: msg.role, parts };
+  });
+}
+
+/**
  * Splits an assistant message's parts at `data-prompt` boundaries so each
  * queued task renders as a separate user→assistant pair.
  *
@@ -164,7 +248,6 @@ export function ChatView({
 }: ChatViewProps) {
   const sessionIdRef = useRef<string | undefined>(undefined);
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>(undefined);
-  const [historicalMessages, setHistoricalMessages] = useState<HistoryMessage[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const initialSessionLoadedRef = useRef(false);
 
@@ -338,12 +421,12 @@ export function ChatView({
           workspaceId,
           sessionId,
         });
-        setHistoricalMessages(data.messages as HistoryMessage[]);
+        setMessages(convertHistoryToUIMessages(data.messages as HistoryMessage[]));
       } finally {
         setLoadingHistory(false);
       }
     },
-    [workspaceId],
+    [workspaceId, setMessages],
   );
 
   useEffect(() => {
@@ -360,7 +443,6 @@ export function ChatView({
       sessionIdRef.current = sessionId;
       setActiveSessionId(sessionId);
       setMessages([]);
-      setHistoricalMessages([]);
       setQueuedMessages([]);
       trpc.queue.clear.mutate({ workspaceId }).catch(() => {});
       onShowSessionListChange(false);
@@ -372,7 +454,6 @@ export function ChatView({
   const handleNewSession = useCallback(() => {
     sessionIdRef.current = undefined;
     setActiveSessionId(undefined);
-    setHistoricalMessages([]);
     setMessages([]);
     setQueuedMessages([]);
     trpc.queue.clear.mutate({ workspaceId }).catch(() => {});
@@ -433,7 +514,7 @@ export function ChatView({
     [workspaceId],
   );
 
-  const liveTaskMap: TaskMap = useMemo(() => {
+  const taskMap: TaskMap = useMemo(() => {
     let map: TaskMap = new Map();
     for (const msg of messages) {
       for (const part of msg.parts) {
@@ -448,46 +529,7 @@ export function ChatView({
     return map;
   }, [messages]);
 
-  // When reconnecting to a stream, the buffered chunks replay the current
-  // task's content which overlaps with the tail of the session history.
-  // Strip the overlapping turn from history so each message appears once.
-  const filteredHistoricalMessages = useMemo(() => {
-    if (historicalMessages.length === 0) return historicalMessages;
-    // Find current prompt from data-prompt parts in the last assistant message
-    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-    const dataPromptPart = lastAssistant?.parts.find((p) => p.type === "data-prompt");
-    const currentPrompt = dataPromptPart
-      ? (dataPromptPart as { type: string; data: { text: string } }).data.text.trim()
-      : undefined;
-    if (!currentPrompt) return historicalMessages;
-    // Strip overlapping turn from history
-    for (let i = historicalMessages.length - 1; i >= 0; i--) {
-      if (historicalMessages[i].role === "user") {
-        const text = historicalMessages[i].content
-          .filter((b) => b.type === "text")
-          .map((b) => b.text)
-          .join("\n")
-          .trim();
-        if (text === currentPrompt) return historicalMessages.slice(0, i);
-        break;
-      }
-    }
-    return historicalMessages;
-  }, [historicalMessages, messages]);
-
-  const historyToolResultMap = useMemo(
-    () => buildToolResultMap(filteredHistoricalMessages),
-    [filteredHistoricalMessages],
-  );
-  const { taskMap: historyTaskMap } = useMemo(
-    () => buildHistoryTaskMap(filteredHistoricalMessages, historyToolResultMap),
-    [filteredHistoricalMessages, historyToolResultMap],
-  );
-
-  const displayTaskMap = liveTaskMap.size > 0 ? liveTaskMap : historyTaskMap;
-
   const getLastUserMessage = useCallback((): string | undefined => {
-    // Check live messages: user messages first, then data-prompt parts in assistant messages
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === "user") {
         const text = messages[i].parts
@@ -504,28 +546,10 @@ export function ChatView({
         if (last) return (last as { type: string; data: { text: string } }).data.text;
       }
     }
-    // Fall back to historical messages
-    for (let i = filteredHistoricalMessages.length - 1; i >= 0; i--) {
-      if (filteredHistoricalMessages[i].role === "user") {
-        const text = filteredHistoricalMessages[i].content
-          .filter((b) => b.type === "text")
-          .map((b) => b.text ?? "")
-          .join("\n")
-          .trim();
-        if (text) return text;
-      }
-    }
     return undefined;
-  }, [messages, filteredHistoricalMessages]);
+  }, [messages]);
 
-  const hasHistory = filteredHistoricalMessages.length > 0;
-  const hasLiveMessages = messages.length > 0;
-  // Detect reconnected/queued prompt: assistant message has data-prompt parts
-  // but no user message exists in the live messages array.
-  const hasReconnectedPrompt =
-    messages.some((m) => m.role === "assistant" && m.parts.some((p) => p.type === "data-prompt")) &&
-    !messages.some((m) => m.role === "user");
-  const isEmpty = !hasHistory && !hasLiveMessages && !hasReconnectedPrompt;
+  const isEmpty = messages.length === 0;
 
   if (supportsSessionListing && showSessionList) {
     return (
@@ -550,21 +574,9 @@ export function ChatView({
             />
           )}
 
-          {loadingHistory && historicalMessages.length === 0 && (
+          {loadingHistory && messages.length === 0 && (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          )}
-
-          {filteredHistoricalMessages.length > 0 && (
-            <HistoryMessages messages={filteredHistoricalMessages} />
-          )}
-
-          {hasHistory && (hasLiveMessages || hasReconnectedPrompt) && (
-            <div className="flex items-center gap-3 py-2">
-              <div className="h-px flex-1 bg-border/50" />
-              <span className="text-sm text-muted-foreground">new messages</span>
-              <div className="h-px flex-1 bg-border/50" />
             </div>
           )}
 
@@ -739,7 +751,7 @@ export function ChatView({
       </Conversation>
 
       <div className="mx-auto w-full max-w-3xl shrink-0 px-3 lg:px-4 pt-2 pb-4 standalone:pb-[env(safe-area-inset-bottom)]">
-        <TaskListWidget tasks={displayTaskMap} workspaceId={workspaceId} />
+        <TaskListWidget tasks={taskMap} workspaceId={workspaceId} />
         <PromptInput onSubmit={handleSubmit} draftKey={workspaceId}>
           <SlashCommandSuggestions skills={skills} />
           <PromptInputTextarea
@@ -877,36 +889,6 @@ function QueuedMessageBubble({ text, onCancel }: { text: string; onCancel: () =>
   );
 }
 
-function buildToolResultMap(messages: HistoryMessage[]) {
-  const map = new Map<string, HistoryMessageContent>();
-  for (const msg of messages) {
-    for (const block of msg.content) {
-      if (block.type === "tool_result" && block.toolCallId) {
-        map.set(block.toolCallId, block);
-      }
-    }
-  }
-  return map;
-}
-
-function buildHistoryTaskMap(
-  messages: HistoryMessage[],
-  toolResultMap: Map<string, HistoryMessageContent>,
-): { taskMap: TaskMap; taskToolCallIds: Set<string> } {
-  const taskToolCallIds = new Set<string>();
-  let map: TaskMap = new Map();
-  for (const msg of messages) {
-    for (const block of msg.content) {
-      if (block.type !== "tool_use" || !block.toolName || !isTaskTool(block.toolName)) continue;
-      const id = block.toolCallId ?? "";
-      taskToolCallIds.add(id);
-      const item = historyToolToItem(block, toolResultMap.get(id));
-      map = applyTaskToolCall(map, item);
-    }
-  }
-  return { taskMap: map, taskToolCallIds };
-}
-
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 
 /**
@@ -940,109 +922,4 @@ function parseSharedFiles(text: string): {
   });
 
   return { displayText, files };
-}
-
-function HistoryMessages({ messages }: { messages: HistoryMessage[] }) {
-  const toolResultMap = useMemo(() => buildToolResultMap(messages), [messages]);
-  const { taskToolCallIds } = useMemo(
-    () => buildHistoryTaskMap(messages, toolResultMap),
-    [messages, toolResultMap],
-  );
-
-  return (
-    <>
-      {messages.map((msg) => (
-        <HistoryMessageView
-          key={msg.id}
-          message={msg}
-          toolResultMap={toolResultMap}
-          taskToolCallIds={taskToolCallIds}
-        />
-      ))}
-    </>
-  );
-}
-
-function HistoryMessageView({
-  message,
-  toolResultMap,
-  taskToolCallIds,
-}: {
-  message: HistoryMessage;
-  toolResultMap: Map<string, HistoryMessageContent>;
-  taskToolCallIds: Set<string>;
-}) {
-  const textBlocks = message.content.filter((b) => b.type === "text" && b.text?.trim());
-  const toolUseBlocks = message.content.filter((b) => b.type === "tool_use");
-
-  if (message.role === "user") {
-    const userText = textBlocks.map((b) => b.text).join("\n");
-    if (!userText) return null;
-    const { displayText, files } = parseSharedFiles(userText);
-    return (
-      <Message from="user">
-        <MessageContent>
-          {files.map((file) => (
-            <MessageFilePart key={file.url} part={file} />
-          ))}
-          {displayText && <MessageResponse>{displayText}</MessageResponse>}
-        </MessageContent>
-      </Message>
-    );
-  }
-
-  if (textBlocks.length === 0 && toolUseBlocks.length === 0) return null;
-
-  return (
-    <Message from="assistant">
-      <MessageContent>
-        {renderHistoryContent(message, toolResultMap, taskToolCallIds)}
-      </MessageContent>
-    </Message>
-  );
-}
-
-function historyToolToItem(
-  tool: HistoryMessageContent,
-  result: HistoryMessageContent | undefined,
-): ToolCallItem {
-  const toolName = tool.toolName ?? "unknown";
-  // Interactive tools without a result are still waiting for user input
-  const isInteractive = toolName === "AskUserQuestion" || toolName === "ExitPlanMode";
-  const isUnanswered = isInteractive && !result;
-  return {
-    toolCallId: tool.toolCallId ?? "",
-    toolName,
-    input: tool.input,
-    output: result?.output,
-    errorText: result?.isError ? (result.output ?? undefined) : undefined,
-    isError: result?.isError ?? false,
-    isInProgress: isUnanswered,
-    approvalId: isUnanswered ? (tool.toolCallId ?? undefined) : undefined,
-  };
-}
-
-function renderHistoryContent(
-  message: HistoryMessage,
-  toolResultMap: Map<string, HistoryMessageContent>,
-  taskToolCallIds: Set<string>,
-) {
-  const elements: React.ReactNode[] = [];
-
-  for (const block of message.content) {
-    if (block.type === "text" && block.text?.trim()) {
-      elements.push(
-        <MessageResponse key={`text-${elements.length}`}>{block.text}</MessageResponse>,
-      );
-    } else if (block.type === "tool_use") {
-      const callId = block.toolCallId ?? "";
-      if (taskToolCallIds.has(callId)) {
-        continue;
-      }
-      const item = historyToolToItem(block, toolResultMap.get(callId));
-      elements.push(<ToolCall key={`tool-${elements.length}`} item={item} />);
-    }
-  }
-
-  return elements;
 }

@@ -20,6 +20,9 @@ esbuild start-server.ts \
 # When building for npm publish, skip this — npm consumers install native
 # modules as regular dependencies.
 if [ "${NPM_PUBLISH:-}" != "1" ]; then
+  # Clean stale native modules from previous builds
+  rm -rf dist/node_modules
+
   # Copy node-pty native module (only current platform prebuilds, no debug symbols)
   mkdir -p dist/node_modules/node-pty/prebuilds
   cp -RL node_modules/node-pty/package.json dist/node_modules/node-pty/
@@ -69,22 +72,12 @@ if [ "${NPM_PUBLISH:-}" != "1" ]; then
     cp "$CLAUDE_SDK_CLI" dist/cli.js
   fi
 
-  # Copy Codex CLI platform binary.
-  # The Codex SDK uses createRequire(import.meta.url).resolve("@openai/codex/package.json")
-  # which resolves from dist/, so we mirror the package structure in dist/node_modules/.
+  # Copy Codex SDK package.json so createRequire(import.meta.url).resolve("@openai/codex/package.json")
+  # works from dist/. The actual codex CLI binary is expected to be installed on the user's system.
   CODEX_PKG_DIR="$(find "$MONO_ROOT/node_modules/.pnpm" -path "*/@openai/codex/package.json" -type f 2>/dev/null | head -1)"
   if [ -n "$CODEX_PKG_DIR" ]; then
-    CODEX_DIR="$(dirname "$CODEX_PKG_DIR")"
-    CODEX_PEERS="$(dirname "$CODEX_DIR")"
     mkdir -p dist/node_modules/@openai/codex
     cp "$CODEX_PKG_DIR" dist/node_modules/@openai/codex/
-    # Copy platform-specific binary package (e.g. @openai/codex-darwin-arm64)
-    for platform_dir in "$CODEX_PEERS"/codex-"$PLATFORM"-*; do
-      [ -d "$platform_dir" ] || continue
-      pkg_name="$(basename "$platform_dir")"
-      mkdir -p "dist/node_modules/@openai/$pkg_name"
-      cp -RL "$platform_dir"/* "dist/node_modules/@openai/$pkg_name/"
-    done
   fi
 fi
 

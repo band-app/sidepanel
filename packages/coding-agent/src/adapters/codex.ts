@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -58,7 +59,7 @@ export class CodexAdapter implements CodingAgent {
     this.workspaceDir = config.workspaceDir;
     this.maxTurns = config.maxTurns;
     this.model = config.options.model;
-    this.executablePath = config.options.executablePath;
+    this.executablePath = config.options.executablePath ?? resolveCodexBinary();
   }
 
   abort(): void {
@@ -285,6 +286,23 @@ export class CodexAdapter implements CodingAgent {
   ): Promise<SessionMessageItem[]> {
     log.info({ sessionId, dir, ...options }, "getSessionMessages");
     return readCodexSessionMessages(sessionId, options);
+  }
+}
+
+// ─── Binary resolution ───────────────────────────────────────────────────────
+
+/**
+ * Resolve the `codex` binary from the system PATH.
+ * The SDK's built-in `findCodexPath()` requires the platform-specific npm
+ * package (e.g. `@openai/codex-darwin-arm64`) which we don't bundle.
+ * Instead we expect `codex` to be installed on the user's system.
+ */
+function resolveCodexBinary(): string | undefined {
+  try {
+    const cmd = process.platform === "win32" ? "where" : "which";
+    return execFileSync(cmd, ["codex"], { encoding: "utf-8" }).trim() || undefined;
+  } catch {
+    return undefined;
   }
 }
 

@@ -1,5 +1,4 @@
-import { spawn } from "node:child_process";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -173,7 +172,7 @@ function wsSubscribe(
   serverUrl: string,
   procedure: string,
   input: unknown,
-  opts?: { timeoutMs?: number },
+  _opts?: { timeoutMs?: number },
 ): {
   messages: WSMessage[];
   close: () => void;
@@ -534,7 +533,10 @@ describe("needs_attention — status stream via WebSocket", () => {
       const snapshot = await sub.waitForEvent(
         (data) => (data as { kind: string }).kind === "snapshot",
       );
-      const snapshotData = snapshot as { kind: string; statuses: Array<{ agent: { status: string } }> };
+      const snapshotData = snapshot as {
+        kind: string;
+        statuses: Array<{ agent: { status: string } }>;
+      };
       expect(snapshotData.kind).toBe("snapshot");
       const ws = snapshotData.statuses.find(
         (s: { workspaceId?: string }) => s.workspaceId === "myrepo-main",

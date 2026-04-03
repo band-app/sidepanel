@@ -22,9 +22,7 @@ describe("build output", () => {
   });
 
   it("contains node-pty package.json", () => {
-    expect(
-      existsSync(join(dist, "node_modules/node-pty/package.json"))
-    ).toBe(true);
+    expect(existsSync(join(dist, "node_modules/node-pty/package.json"))).toBe(true);
   });
 
   it("contains node-pty prebuilds", () => {
@@ -36,12 +34,7 @@ describe("build output", () => {
 
   it("contains better-sqlite3 native binary", () => {
     expect(
-      existsSync(
-        join(
-          dist,
-          "node_modules/better-sqlite3/build/Release/better_sqlite3.node"
-        )
-      )
+      existsSync(join(dist, "node_modules/better-sqlite3/build/Release/better_sqlite3.node")),
     ).toBe(true);
   });
 
@@ -50,8 +43,6 @@ describe("build output", () => {
   });
 
   it.skipIf(skipSdkChecks)("contains Codex SDK package", () => {
-    expect(
-      existsSync(join(dist, "node_modules/@openai/codex/package.json"))
-    ).toBe(true);
+    expect(existsSync(join(dist, "node_modules/@openai/codex/package.json"))).toBe(true);
   });
 });

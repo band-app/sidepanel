@@ -196,7 +196,7 @@ export class OpenCodeAdapter implements CodingAgent {
 
   async listSessions(dir: string): Promise<SessionListItem[]> {
     log.info({ dir }, "listSessions");
-    const sessions = await fetchOpenCodeSessions(this.executablePath);
+    const sessions = await fetchOpenCodeSessions(this.executablePath, dir);
     return sessions
       .filter((s) => s.directory === dir)
       .map((s) => ({
@@ -291,12 +291,15 @@ interface OpenCodeSessionListEntry {
   directory: string;
 }
 
-function fetchOpenCodeSessions(executablePath: string): Promise<OpenCodeSessionListEntry[]> {
+function fetchOpenCodeSessions(
+  executablePath: string,
+  cwd?: string,
+): Promise<OpenCodeSessionListEntry[]> {
   return new Promise((resolve, reject) => {
     execFile(
       executablePath,
       ["session", "list", "--format", "json"],
-      { timeout: 10_000 },
+      { timeout: 10_000, cwd },
       (err, stdout) => {
         if (err) {
           reject(err);
@@ -394,7 +397,9 @@ async function fetchOpenCodeSessionMessages(
       switch (part.type) {
         case "text":
           if (part.text) {
-            content.push({ type: "text", text: part.text });
+            // OpenCode wraps user text in quotes and adds a trailing newline
+            const text = role === "user" ? part.text.trim().replace(/^"|"$/g, "") : part.text;
+            content.push({ type: "text", text });
           }
           break;
 

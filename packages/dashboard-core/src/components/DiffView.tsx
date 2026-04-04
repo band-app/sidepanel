@@ -295,7 +295,7 @@ function LazyFileRow({
         >
           ▶
         </span>
-        <span className="min-w-0 flex-1 truncate font-mono">
+        <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono [scrollbar-width:none]">
           {filename} <FileStatusBadge status={status} />
         </span>
         {onOpenFile && (
@@ -494,7 +494,7 @@ function LegacyDiffView({ workspaceId, active, onStatsChange, onOpenFile }: Diff
                 >
                   ▶
                 </span>
-                <span className="min-w-0 flex-1 truncate font-mono">
+                <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono [scrollbar-width:none]">
                   {file.filename} <FileStatusBadge status={fileStatuses[file.filename]} />
                 </span>
                 {onOpenFile && (

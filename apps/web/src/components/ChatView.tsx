@@ -71,7 +71,7 @@ function toolPartToItem(part: ToolPart): ToolCallItem {
 
 function ThinkingIndicator() {
   return (
-    <div className="flex items-center gap-2 text-muted-foreground">
+    <div className="mt-2 flex items-center gap-2 text-muted-foreground">
       <Loader2 className="size-4 lg:size-3.5 animate-spin" />
       <span className="text-base lg:text-sm">Thinking...</span>
     </div>

@@ -1,6 +1,9 @@
 import {
   Badge,
   Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   Dialog,
   DialogClose,
   DialogContent,
@@ -19,6 +22,7 @@ import { Link } from "@tanstack/react-router";
 import {
   AlertCircle,
   CheckCircle2,
+  ChevronRight,
   Clock,
   ExternalLink,
   ListTodo,
@@ -41,6 +45,9 @@ interface TaskRecord {
   sessionId?: string;
   startedAt: number;
   completedAt?: number;
+  mode?: string;
+  model?: string;
+  codingAgentId?: string;
 }
 
 interface ProjectInfo {
@@ -83,13 +90,40 @@ export function TasksPageContent() {
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showNewTask, setShowNewTask] = useState(false);
+  const [agents, setAgents] = useState<CodingAgentDef[]>([]);
+
+  useEffect(() => {
+    trpc.settings.get.query().then((settings) => {
+      const raw = (settings as Record<string, unknown>).codingAgents;
+      const codingAgents = Array.isArray(raw) ? (raw as CodingAgentDef[]) : [];
+      setAgents(codingAgents);
+    });
+  }, []);
+
+  const agentMap = useMemo(() => {
+    const map = new Map<string, CodingAgentDef>();
+    for (const a of agents) map.set(a.id, a);
+    return map;
+  }, [agents]);
+
+  const [workspaceIds, setWorkspaceIds] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const tasksData = await trpc.tasks.list.query({});
+      const [tasksData, projectsData] = await Promise.all([
+        trpc.tasks.list.query({}),
+        trpc.projects.list.query(),
+      ]);
       setTasks(tasksData.tasks as TaskRecord[]);
+      const ids = new Set<string>();
+      for (const p of projectsData.projects) {
+        for (const wt of p.worktrees) {
+          if (wt.workspaceId) ids.add(wt.workspaceId);
+        }
+      }
+      setWorkspaceIds(ids);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load tasks");
     } finally {
@@ -117,8 +151,14 @@ export function TasksPageContent() {
   }, [tasks]);
 
   const handleNewTaskSubmit = useCallback(
-    async (workspaceId: string, prompt: string, mode?: string) => {
-      await trpc.tasks.submit.mutate({ workspaceId, prompt, mode });
+    async (
+      workspaceId: string,
+      prompt: string,
+      mode?: string,
+      model?: string,
+      codingAgentId?: string,
+    ) => {
+      await trpc.tasks.submit.mutate({ workspaceId, prompt, mode, model, codingAgentId });
       setShowNewTask(false);
       await fetchData();
     },
@@ -217,7 +257,13 @@ export function TasksPageContent() {
         {filteredTasks.length > 0 && (
           <div className="flex flex-col gap-2 p-4">
             {filteredTasks.map((task) => (
-              <TaskCard key={task.id} task={task} onAction={fetchData} />
+              <TaskCard
+                key={task.id}
+                task={task}
+                onAction={fetchData}
+                agentMap={agentMap}
+                workspaceExists={workspaceIds.has(task.workspaceId)}
+              />
             ))}
           </div>
         )}
@@ -258,10 +304,21 @@ function StatusBadge({ status }: { status: TaskRecord["status"] }) {
   }
 }
 
-function TaskCard({ task, onAction }: { task: TaskRecord; onAction: () => void }) {
-  const sessionHref = task.sessionId
-    ? `/workspace/${encodeURIComponent(task.workspaceId)}`
-    : undefined;
+function TaskCard({
+  task,
+  onAction,
+  agentMap,
+  workspaceExists,
+}: {
+  task: TaskRecord;
+  onAction: () => void;
+  agentMap: Map<string, CodingAgentDef>;
+  workspaceExists: boolean;
+}) {
+  const sessionHref =
+    task.sessionId && workspaceExists
+      ? `/workspace/${encodeURIComponent(task.workspaceId)}`
+      : undefined;
   const [acting, setActing] = useState(false);
 
   const handleCancel = useCallback(async () => {
@@ -333,7 +390,7 @@ function TaskCard({ task, onAction }: { task: TaskRecord; onAction: () => void }
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span className="font-medium text-foreground/70">
           {task.project}/{task.branch}
         </span>
@@ -344,6 +401,24 @@ function TaskCard({ task, onAction }: { task: TaskRecord; onAction: () => void }
         </span>
         <span className="text-border">·</span>
         <span>{formatDuration(task.startedAt, task.completedAt)}</span>
+        {task.codingAgentId && (
+          <>
+            <span className="text-border">·</span>
+            <span>{agentMap.get(task.codingAgentId)?.label ?? task.codingAgentId}</span>
+          </>
+        )}
+        {task.model && (
+          <>
+            <span className="text-border">·</span>
+            <span>{task.model}</span>
+          </>
+        )}
+        {task.mode && (
+          <>
+            <span className="text-border">·</span>
+            <span className="capitalize">{task.mode}</span>
+          </>
+        )}
         {sessionHref && (
           <>
             <span className="text-border">·</span>
@@ -367,6 +442,18 @@ interface AgentMode {
   description?: string;
 }
 
+interface ModelInfo {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface CodingAgentDef {
+  id: string;
+  type: string;
+  label: string;
+}
+
 function NewTaskDialog({
   open,
   onOpenChange,
@@ -374,7 +461,13 @@ function NewTaskDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (workspaceId: string, prompt: string, mode?: string) => Promise<void>;
+  onSubmit: (
+    workspaceId: string,
+    prompt: string,
+    mode?: string,
+    model?: string,
+    codingAgentId?: string,
+  ) => Promise<void>;
 }) {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>("");
@@ -382,6 +475,10 @@ function NewTaskDialog({
   const [prompt, setPrompt] = useState("");
   const [selectedMode, setSelectedMode] = useState<string>("");
   const [modes, setModes] = useState<AgentMode[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [agents, setAgents] = useState<CodingAgentDef[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -394,25 +491,47 @@ function NewTaskDialog({
       setSelectedBranch("");
       setPrompt("");
       setSelectedMode("");
-      setModes([]);
+      setSelectedModel("");
+      setSelectedAgent("");
       setSubmitError(null);
       trpc.projects.list.query().then((data) => {
         setProjects(data.projects as ProjectInfo[]);
+      });
+      trpc.settings.get.query().then((settings) => {
+        const raw = (settings as Record<string, unknown>).codingAgents;
+        const codingAgents = Array.isArray(raw) ? (raw as CodingAgentDef[]) : [];
+        if (codingAgents.length > 0) {
+          const seen = new Set<string>();
+          const unique = codingAgents.filter((a) => {
+            if (seen.has(a.type)) return false;
+            seen.add(a.type);
+            return true;
+          });
+          setAgents(unique);
+        } else {
+          setAgents([]);
+        }
       });
     }
   }, [open]);
 
   useEffect(() => {
-    if (workspaceId) {
-      trpc.modes.list.query({ workspaceId }).then((data) => {
-        setModes(data.modes as AgentMode[]);
-        setSelectedMode("");
-      });
-    } else {
-      setModes([]);
-      setSelectedMode("");
-    }
-  }, [workspaceId]);
+    if (!open) return;
+    const agentId = selectedAgent || undefined;
+    trpc.modes.list.query({ agentId }).then((data) => {
+      const newModes = data.modes as AgentMode[];
+      setModes(newModes);
+      setSelectedMode((prev) => (newModes.some((m) => m.id === prev) ? prev : ""));
+    });
+    trpc.models.list
+      .query({ agentId })
+      .then((data) => {
+        const newModels = data.models as ModelInfo[];
+        setModels(newModels);
+        setSelectedModel((prev) => (newModels.some((m) => m.id === prev) ? prev : ""));
+      })
+      .catch(() => setModels([]));
+  }, [open, selectedAgent]);
 
   const branches = useMemo(() => {
     const project = projects.find((p) => p.name === selectedProject);
@@ -429,17 +548,25 @@ function NewTaskDialog({
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await onSubmit(workspaceId, prompt.trim(), selectedMode || undefined);
+      await onSubmit(
+        workspaceId,
+        prompt.trim(),
+        selectedMode || undefined,
+        selectedModel || undefined,
+        selectedAgent || undefined,
+      );
       setSelectedProject("");
       setSelectedBranch("");
       setPrompt("");
       setSelectedMode("");
+      setSelectedModel("");
+      setSelectedAgent("");
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to submit task");
     } finally {
       setSubmitting(false);
     }
-  }, [workspaceId, prompt, selectedMode, onSubmit]);
+  }, [workspaceId, prompt, selectedMode, selectedModel, selectedAgent, onSubmit]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -492,26 +619,6 @@ function NewTaskDialog({
             </Select>
           </div>
 
-          {modes.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium" htmlFor="mode-select">
-                Mode
-              </label>
-              <Select value={selectedMode} onValueChange={setSelectedMode}>
-                <SelectTrigger id="mode-select">
-                  <SelectValue placeholder="Default" />
-                </SelectTrigger>
-                <SelectContent>
-                  {modes.map((mode) => (
-                    <SelectItem key={mode.id} value={mode.id}>
-                      {mode.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium" htmlFor="task-prompt">
               Prompt
@@ -524,6 +631,78 @@ function NewTaskDialog({
               rows={4}
             />
           </div>
+
+          {(agents.length > 1 || models.length > 0 || modes.length > 0) && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex w-full items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors [&[data-state=open]>svg]:rotate-90">
+                <ChevronRight className="size-3.5 transition-transform" />
+                Advanced options
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="flex flex-col gap-4 pt-3">
+                  {agents.length > 1 && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium" htmlFor="agent-select">
+                        Agent
+                      </label>
+                      <Select value={selectedAgent} onValueChange={setSelectedAgent}>
+                        <SelectTrigger id="agent-select">
+                          <SelectValue placeholder="Default" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {agents.map((agent) => (
+                            <SelectItem key={agent.id} value={agent.id}>
+                              {agent.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {models.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium" htmlFor="model-select">
+                        Model
+                      </label>
+                      <Select value={selectedModel} onValueChange={setSelectedModel}>
+                        <SelectTrigger id="model-select">
+                          <SelectValue placeholder="Default" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {models.map((model) => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {modes.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <label className="text-sm font-medium" htmlFor="mode-select">
+                        Mode
+                      </label>
+                      <Select value={selectedMode} onValueChange={setSelectedMode}>
+                        <SelectTrigger id="mode-select">
+                          <SelectValue placeholder="Default" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {modes.map((mode) => (
+                            <SelectItem key={mode.id} value={mode.id}>
+                              {mode.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
           {submitError && <p className="text-sm text-destructive">{submitError}</p>}
         </div>

@@ -515,7 +515,7 @@ describe("stream stays alive across auto-drained tasks (WebSocket)", () => {
     rmSync(tmpHome, { recursive: true, force: true });
   });
 
-  it("auto-started task streams events to connected client", async () => {
+  it("auto-started task streams events including data-prompt to connected client", async () => {
     const workspaceId = "testproject-main";
 
     // 1. Pre-load the queue BEFORE submitting the first task
@@ -542,6 +542,12 @@ describe("stream stays alive across auto-drained tasks (WebSocket)", () => {
 
     const resultEvents = events.filter((e) => e.event === "data-result");
     expect(resultEvents.length).toBeGreaterThanOrEqual(1);
+
+    // 5. Should have a data-prompt event for the queued message so the
+    //    client can render the user message bubble between responses
+    const promptEvents = events.filter((e) => e.event === "data-prompt");
+    expect(promptEvents.length).toBe(1);
+    expect((promptEvents[0].data as { data: { text: string } }).data.text).toBe("task B");
 
     // 6. Queue should be empty
     const queueRes = await trpcQuery(server.url, "queue.get", { workspaceId });

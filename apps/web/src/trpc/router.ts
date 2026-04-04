@@ -1192,12 +1192,17 @@ const tasksRouter = t.router({
           while (queue.length > 0) {
             const chunk = queue.shift()!;
             yield chunk;
-            // When a task finishes and no queued follow-ups remain,
-            // end the subscription. Otherwise keep it alive — the
-            // backend auto-starts the next queued task and its events
-            // flow through the same listener.
-            if (chunk.type === "finish" && getQueuedMessages(workspaceId).length === 0) {
-              return;
+            // When a task finishes, end the subscription only if no
+            // follow-up work remains. Keep it alive when queued messages
+            // exist OR when an auto-started task is already running
+            // (shiftQueuedMessage may have emptied the queue before we
+            // get here, but submitTask already created a new running task).
+            if (chunk.type === "finish") {
+              const hasQueued = getQueuedMessages(workspaceId).length > 0;
+              const taskRunning = getTask(workspaceId)?.status === "running";
+              if (!hasQueued && !taskRunning) {
+                return;
+              }
             }
           }
           await new Promise<void>((r) => {

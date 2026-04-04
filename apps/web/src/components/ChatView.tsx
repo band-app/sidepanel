@@ -189,28 +189,18 @@ function convertHistoryToUIMessages(history: HistoryMessage[]): UIMessage[] {
  * Splits an assistant message's parts at `data-prompt` boundaries so each
  * queued task renders as a separate user→assistant pair.
  *
- * When `skipFirstPrompt` is true, the first `data-prompt` is not turned into
- * a user bubble (because a real user message already precedes the assistant
- * message in the messages array).
+ * Every `data-prompt` becomes a user bubble — they are only emitted for
+ * queued messages (never for the initial direct message which is already
+ * a real user message in the messages array).
  */
-function splitMessageAtQueueBoundaries(
-  parts: UIMessageParts,
-  skipFirstPrompt: boolean,
-): QueueSegment[] {
+function splitMessageAtQueueBoundaries(parts: UIMessageParts): QueueSegment[] {
   const segments: QueueSegment[] = [];
   let current: QueueSegment = { userPrompt: null, parts: [] };
-  let seenFirst = false;
 
   for (const part of parts) {
     if (part.type === "data-prompt") {
-      if (!seenFirst) {
-        seenFirst = true;
-        if (skipFirstPrompt) continue; // user message already in messages array
-      }
       // Finish current segment and start a new one
-      if (current.parts.length > 0 || segments.length > 0 || !skipFirstPrompt) {
-        segments.push(current);
-      }
+      segments.push(current);
       current = {
         userPrompt: (part as { type: string; data: { text: string } }).data.text,
         parts: [],
@@ -629,8 +619,6 @@ export function ChatView({
               }
 
               // Assistant message
-              const hasPrecedingUserMsg =
-                messageIndex > 0 && messages[messageIndex - 1]?.role === "user";
               const hasDataPrompts = message.parts.some((p) => p.type === "data-prompt");
 
               if (!hasDataPrompts) {
@@ -676,7 +664,7 @@ export function ChatView({
               }
 
               // Split at data-prompt boundaries
-              const segments = splitMessageAtQueueBoundaries(message.parts, hasPrecedingUserMsg);
+              const segments = splitMessageAtQueueBoundaries(message.parts);
 
               return segments.map((segment, segIdx) => {
                 const visibleParts = groupMessageParts(segment.parts);

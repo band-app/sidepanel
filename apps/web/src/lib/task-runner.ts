@@ -383,6 +383,12 @@ async function runTask(workspaceId: string, task: InternalTask) {
     const queued = shiftQueuedMessage(workspaceId);
     if (queued) {
       try {
+        // Emit the queued user prompt so the client can render it as a
+        // user message bubble between assistant responses.
+        broadcast(workspaceId, {
+          type: "data-prompt" as UIMessageChunk["type"],
+          data: { text: queued },
+        } as UIMessageChunk);
         submitTask(workspaceId, queued, task.sessionId);
         autoStarted = true;
       } catch (err) {

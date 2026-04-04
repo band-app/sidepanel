@@ -57,22 +57,24 @@ function seedTask(
 
 test.beforeAll(async () => {
   tmpHome = createTmpHome();
+  const projectPath = join(tmpHome, "projects", "myapp");
+  const backendPath = join(tmpHome, "projects", "backend");
   seedState(tmpHome, {
     projects: [
       {
         name: "myapp",
-        path: "/tmp/myapp",
+        path: projectPath,
         defaultBranch: "main",
         worktrees: [
-          { branch: "main", path: "/tmp/myapp" },
-          { branch: "feat/auth", path: "/tmp/myapp-auth" },
+          { branch: "main", path: projectPath },
+          { branch: "feat/auth", path: join(tmpHome, "projects", "myapp-auth") },
         ],
       },
       {
         name: "backend",
-        path: "/tmp/backend",
+        path: backendPath,
         defaultBranch: "main",
-        worktrees: [{ branch: "main", path: "/tmp/backend" }],
+        worktrees: [{ branch: "main", path: backendPath }],
       },
     ],
   });

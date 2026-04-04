@@ -3,8 +3,12 @@ import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 
 const PROJECT_ROOT = join(import.meta.dirname, "../..");
+const MIGRATIONS_FOLDER = join(PROJECT_ROOT, "src/lib/db/migrations");
 
 export interface ServerHandle {
   url: string;
@@ -20,8 +24,44 @@ export function createTmpHome(): string {
   return tmp;
 }
 
-export function seedState(tmpHome: string, state: object): void {
+interface SeedProject {
+  name: string;
+  path: string;
+  defaultBranch: string;
+  label?: string;
+  worktrees: { branch: string; path: string }[];
+}
+
+export function seedState(tmpHome: string, state: { projects: SeedProject[] }): void {
+  // Write state.json for backwards compatibility
   writeFileSync(join(tmpHome, ".band", "state.json"), JSON.stringify(state));
+
+  // Also seed the SQLite DB so loadState() finds the projects
+  const dbPath = join(tmpHome, ".band", "band.db");
+  const sqlite = new Database(dbPath);
+  sqlite.pragma("journal_mode = WAL");
+  const db = drizzle(sqlite);
+  migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
+
+  for (let i = 0; i < state.projects.length; i++) {
+    const project = state.projects[i];
+    sqlite
+      .prepare(
+        `INSERT OR REPLACE INTO projects (name, path, default_branch, label, sort_order)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(project.name, project.path, project.defaultBranch, project.label ?? null, i);
+
+    for (const wt of project.worktrees) {
+      sqlite
+        .prepare(
+          `INSERT INTO worktrees (project_name, branch, path)
+           VALUES (?, ?, ?)`,
+        )
+        .run(project.name, wt.branch, wt.path);
+    }
+  }
+  sqlite.close();
 }
 
 export function seedSettings(tmpHome: string, settings: object): void {

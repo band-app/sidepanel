@@ -1063,7 +1063,20 @@ const tasksRouter = t.router({
         .optional(),
     )
     .query(({ input }) => {
-      return { tasks: listTasks(input) };
+      const tasks = listTasks(input);
+      const state = loadState();
+      const workspaceIds = new Set<string>();
+      for (const p of state.projects) {
+        for (const wt of p.worktrees) {
+          workspaceIds.add(toWorkspaceId(p.name, wt.branch));
+        }
+      }
+      return {
+        tasks: tasks.map((t) => ({
+          ...t,
+          workspaceExists: workspaceIds.has(t.workspaceId),
+        })),
+      };
     }),
 
   submit: publicProcedure

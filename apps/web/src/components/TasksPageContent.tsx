@@ -48,6 +48,7 @@ interface TaskRecord {
   mode?: string;
   model?: string;
   codingAgentId?: string;
+  workspaceExists?: boolean;
 }
 
 interface ProjectInfo {
@@ -106,24 +107,12 @@ export function TasksPageContent() {
     return map;
   }, [agents]);
 
-  const [workspaceIds, setWorkspaceIds] = useState<Set<string>>(new Set());
-
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [tasksData, projectsData] = await Promise.all([
-        trpc.tasks.list.query({}),
-        trpc.projects.list.query(),
-      ]);
+      const tasksData = await trpc.tasks.list.query({});
       setTasks(tasksData.tasks as TaskRecord[]);
-      const ids = new Set<string>();
-      for (const p of projectsData.projects) {
-        for (const wt of p.worktrees) {
-          if (wt.workspaceId) ids.add(wt.workspaceId);
-        }
-      }
-      setWorkspaceIds(ids);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load tasks");
     } finally {
@@ -257,13 +246,7 @@ export function TasksPageContent() {
         {filteredTasks.length > 0 && (
           <div className="flex flex-col gap-2 p-4">
             {filteredTasks.map((task) => (
-              <TaskCard
-                key={task.id}
-                task={task}
-                onAction={fetchData}
-                agentMap={agentMap}
-                workspaceExists={workspaceIds.has(task.workspaceId)}
-              />
+              <TaskCard key={task.id} task={task} onAction={fetchData} agentMap={agentMap} />
             ))}
           </div>
         )}
@@ -308,15 +291,13 @@ function TaskCard({
   task,
   onAction,
   agentMap,
-  workspaceExists,
 }: {
   task: TaskRecord;
   onAction: () => void;
   agentMap: Map<string, CodingAgentDef>;
-  workspaceExists: boolean;
 }) {
   const sessionHref =
-    task.sessionId && workspaceExists
+    task.sessionId && task.workspaceExists
       ? `/workspace/${encodeURIComponent(task.workspaceId)}`
       : undefined;
   const [acting, setActing] = useState(false);

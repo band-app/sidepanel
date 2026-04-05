@@ -17,6 +17,22 @@ export interface DiffStats {
 
 type ViewMode = "unified" | "split";
 
+const VIEW_MODE_KEY = "band:diff-view-mode";
+
+function getStoredViewMode(): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY);
+    if (v === "split" || v === "unified") return v;
+  } catch {}
+  return "unified";
+}
+
+function storeViewMode(mode: ViewMode) {
+  try {
+    localStorage.setItem(VIEW_MODE_KEY, mode);
+  } catch {}
+}
+
 interface DiffViewProps {
   workspaceId: string;
   active?: boolean;
@@ -352,7 +368,11 @@ function LegacyDiffView({ workspaceId, active, onStatsChange, onOpenFile }: Diff
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openFiles, setOpenFiles] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>("unified");
+  const [viewMode, setViewModeState] = useState<ViewMode>(getStoredViewMode);
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setViewModeState(mode);
+    storeViewMode(mode);
+  }, []);
 
   useEffect(() => {
     const getWorkspaceDiff = adapter.getWorkspaceDiff;
@@ -543,7 +563,11 @@ export function DiffView({ workspaceId, active = true, onStatsChange, onOpenFile
   const [summary, setSummary] = useState<WorkspaceDiffSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>("unified");
+  const [viewMode, setViewModeState] = useState<ViewMode>(getStoredViewMode);
+  const setViewMode = useCallback((mode: ViewMode) => {
+    setViewModeState(mode);
+    storeViewMode(mode);
+  }, []);
 
   // Fall back to legacy if adapter doesn't support new methods
   const supportsLazy = !!(adapter.getWorkspaceDiffSummary && adapter.getFileDiff);

@@ -8,7 +8,7 @@ import {
   WorkspaceTabNav,
 } from "@band-app/dashboard-core";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, ChevronDown, Clock, Code, GitCompare, Plus, Terminal } from "lucide-react";
+import { ArrowLeft, ChevronDown, Clock, FolderOpen, GitCompare, Plus, Terminal } from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { PanelResizer } from "../components/PanelResizer";
 import { WorkspaceChatPanel } from "../components/WorkspaceChatPanel";
 import { AgentSwitcherContext } from "../hooks/useAgentSwitcherContext";
 import { useIsDesktop } from "../hooks/useIsDesktop";
@@ -152,21 +153,37 @@ function WorkspaceLayout() {
 }
 
 // ---------------------------------------------------------------------------
+// Resizable split panel
+// ---------------------------------------------------------------------------
+
+const PANEL_WIDTH_KEY = "band:chat-panel-width";
+const DEFAULT_PANEL_PCT = 50;
+const MIN_PANEL_PCT = 20;
+const MAX_PANEL_PCT = 80;
+
+function getStoredPanelWidth(): number {
+  try {
+    const v = Number(localStorage.getItem(PANEL_WIDTH_KEY));
+    if (v >= MIN_PANEL_PCT && v <= MAX_PANEL_PCT) return v;
+  } catch {}
+  return DEFAULT_PANEL_PCT;
+}
+
+// ---------------------------------------------------------------------------
 // Desktop 3-panel layout
 // ---------------------------------------------------------------------------
 
 function DesktopDetailTabNav({
   workspaceId,
-  diffStats,
 }: {
   workspaceId: string;
-  diffStats: DiffStats | null;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const prefix = `/workspace/${workspaceId}`;
   const isChanges = pathname.startsWith(`${prefix}/changes`);
   const isCode = pathname.startsWith(`${prefix}/code`);
   const isTerminal = pathname.startsWith(`${prefix}/terminal`);
+  const diffFileCount = useDiffFileCount(decodeURIComponent(workspaceId));
 
   const tabClass = (active: boolean) =>
     `flex h-full flex-1 items-center justify-center gap-2 text-sm font-medium transition-colors ${
@@ -184,15 +201,15 @@ function DesktopDetailTabNav({
       >
         <GitCompare className="size-4" />
         Changes
-        {diffStats && diffStats.filesChanged > 0 && (
+        {diffFileCount > 0 && (
           <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 px-1.5 text-xs font-medium">
-            {diffStats.filesChanged}
+            {diffFileCount}
           </span>
         )}
       </Link>
       <Link to="/workspace/$workspaceId/code" params={{ workspaceId }} className={tabClass(isCode)}>
-        <Code className="size-4" />
-        Code
+        <FolderOpen className="size-4" />
+        Files
       </Link>
       <Link
         to="/workspace/$workspaceId/terminal"
@@ -213,7 +230,6 @@ function DesktopWorkspaceLayout({
   workspaceId: string;
   encodedId: string;
 }) {
-  const { diffStats } = useDiffStatsContext();
   const navigate = useNavigate();
 
   // Dialog state
@@ -250,6 +266,15 @@ function DesktopWorkspaceLayout({
     return () => window.removeEventListener("keydown", handler, true);
   }, []);
 
+  // Resizable panel width
+  const [panelPct, setPanelPct] = useState(getStoredPanelWidth);
+  const handleResize = useCallback((pct: number) => {
+    setPanelPct(pct);
+    try {
+      localStorage.setItem(PANEL_WIDTH_KEY, String(Math.round(pct)));
+    } catch {}
+  }, []);
+
   // Open file from Quick Open / Search dialogs → navigate to code route
   const handleOpenFile = useCallback(
     (path: string) => {
@@ -263,21 +288,23 @@ function DesktopWorkspaceLayout({
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* Middle Panel — Changes / Code / Terminal */}
-      <div className="flex-1 min-w-0 border-r border-border overflow-hidden">
+      {/* Left Panel — Chat */}
+      <div className="min-w-0 overflow-hidden" style={{ width: `${panelPct}%` }}>
+        <WorkspaceChatPanel key={workspaceId} workspaceId={workspaceId} />
+      </div>
+
+      <PanelResizer onResize={handleResize} />
+
+      {/* Right Panel — Changes / Code / Terminal */}
+      <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex h-full flex-col overflow-hidden">
-          <DesktopDetailTabNav workspaceId={encodedId} diffStats={diffStats} />
+          <DesktopDetailTabNav workspaceId={encodedId} />
           <div className="min-h-0 flex-1 overflow-hidden">
             <FindInFileContext.Provider value={{ setFindInFile }}>
               <Outlet />
             </FindInFileContext.Provider>
           </div>
         </div>
-      </div>
-
-      {/* Right Panel — Chat */}
-      <div className="max-w-[768px] flex-1 min-w-0 overflow-hidden">
-        <WorkspaceChatPanel key={workspaceId} workspaceId={workspaceId} />
       </div>
 
       {/* Dialogs */}

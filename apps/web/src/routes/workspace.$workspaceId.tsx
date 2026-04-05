@@ -8,7 +8,15 @@ import {
   WorkspaceTabNav,
 } from "@band-app/dashboard-core";
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { ArrowLeft, ChevronDown, Clock, FolderOpen, GitCompare, Plus, Terminal } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  Clock,
+  FolderOpen,
+  GitCompare,
+  Plus,
+  Terminal,
+} from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -173,11 +181,7 @@ function getStoredPanelWidth(): number {
 // Desktop 3-panel layout
 // ---------------------------------------------------------------------------
 
-function DesktopDetailTabNav({
-  workspaceId,
-}: {
-  workspaceId: string;
-}) {
+function DesktopDetailTabNav({ workspaceId }: { workspaceId: string }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const prefix = `/workspace/${workspaceId}`;
   const isChanges = pathname.startsWith(`${prefix}/changes`);

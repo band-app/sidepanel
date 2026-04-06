@@ -7,22 +7,40 @@ function subscriptionToStream(
 ): ReadableStream<UIMessageChunk> {
   return new ReadableStream<UIMessageChunk>({
     start(controller) {
+      let closed = false;
+
       const subscription = trpc.tasks.stream.subscribe(
         { workspaceId },
         {
           onData(chunk: UIMessageChunk) {
-            controller.enqueue(chunk);
+            if (!closed) {
+              controller.enqueue(chunk);
+            }
           },
           onComplete() {
-            controller.close();
+            if (!closed) {
+              closed = true;
+              controller.close();
+            }
           },
           onError(err: unknown) {
-            controller.error(err);
+            if (!closed) {
+              closed = true;
+              controller.error(err);
+            }
           },
         },
       );
 
       abortSignal?.addEventListener("abort", () => {
+        if (!closed) {
+          closed = true;
+          try {
+            controller.close();
+          } catch {
+            // already closed
+          }
+        }
         subscription.unsubscribe();
       });
     },

@@ -41,6 +41,8 @@ export async function getOrSpawnTerminal(workspaceId: string): Promise<TerminalS
   }
   env.PATH = resolvedPath;
   env.TERM = "xterm-256color";
+  // Remove PORT so workspace dev servers don't inherit the Band server's port
+  delete env.PORT;
 
   const cwd = workspace.worktree.path;
   if (!existsSync(cwd)) {

@@ -31,10 +31,11 @@ export function runSetup(
     return;
   }
 
+  const { PORT: _port, ...parentEnv } = process.env;
   const child = spawn("bash", ["-c", setupCommand], {
     cwd: worktreePath,
     env: {
-      ...process.env,
+      ...parentEnv,
       PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.PATH}`,
     },
     stdio: ["ignore", "pipe", "pipe"],

@@ -20,41 +20,90 @@ export function TerminalPanel({ workspaceId, visible }: TerminalPanelProps) {
     let cleanup: (() => void) | undefined;
 
     // Dynamic import so @xterm (CJS) is never evaluated during SSR
-    Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]).then(
-      ([{ Terminal: XTerm }, { FitAddon: XFitAddon }]) => {
-        if (cancelled || !containerRef.current) return;
+    Promise.all([
+      import("@xterm/xterm"),
+      import("@xterm/addon-fit"),
+      import("@xterm/addon-web-links"),
+    ]).then(([{ Terminal: XTerm }, { FitAddon: XFitAddon }, { WebLinksAddon: XWebLinksAddon }]) => {
+      if (cancelled || !containerRef.current) return;
 
-        // CSS loaded on client only
-        import("@xterm/xterm/css/xterm.css");
+      // CSS loaded on client only
+      import("@xterm/xterm/css/xterm.css");
 
-        const terminal = new XTerm({
-          cursorBlink: true,
-          fontSize: 13,
-          fontFamily: "'SF Mono', Menlo, Monaco, 'Courier New', monospace",
-          theme: {
-            background: "#181818",
-            foreground: "#e8e8e8",
-            cursor: "#e8e8e8",
-            selectionBackground: "rgba(255, 255, 255, 0.2)",
-          },
-        });
+      const terminal = new XTerm({
+        cursorBlink: true,
+        fontSize: 13,
+        fontFamily: "'SF Mono', Menlo, Monaco, 'Courier New', monospace",
+        macOptionIsMeta: true, // Alt+Left/Right → word navigation on macOS
+        theme: {
+          background: "#181818",
+          foreground: "#e8e8e8",
+          cursor: "#e8e8e8",
+          selectionBackground: "rgba(255, 255, 255, 0.2)",
+        },
+      });
 
-        const fitAddon = new XFitAddon();
-        terminal.loadAddon(fitAddon);
-        terminal.open(containerRef.current!);
+      const fitAddon = new XFitAddon();
+      terminal.loadAddon(fitAddon);
+      terminal.loadAddon(new XWebLinksAddon());
+      terminal.open(containerRef.current!);
 
-        terminalRef.current = terminal;
-        fitAddonRef.current = fitAddon;
+      // Alt+Arrow → word navigation (send ESC+b / ESC+f that shells understand)
+      terminal.attachCustomKeyEventHandler((e) => {
+        if (e.type === "keydown" && e.altKey && !e.metaKey && !e.ctrlKey) {
+          if (e.key === "ArrowLeft") {
+            terminal.input("\x1bb");
+            return false;
+          }
+          if (e.key === "ArrowRight") {
+            terminal.input("\x1bf");
+            return false;
+          }
+        }
+        return true;
+      });
 
-        // Connect WebSocket
-        const proto = location.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(
-          `${proto}//${location.host}/terminal?workspaceId=${encodeURIComponent(workspaceId)}`,
+      terminalRef.current = terminal;
+      fitAddonRef.current = fitAddon;
+
+      // Connect WebSocket
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const ws = new WebSocket(
+        `${proto}//${location.host}/terminal?workspaceId=${encodeURIComponent(workspaceId)}`,
+      );
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        fitAddon.fit();
+        ws.send(
+          JSON.stringify({
+            type: "resize",
+            cols: terminal.cols,
+            rows: terminal.rows,
+          }),
         );
-        wsRef.current = ws;
+      };
 
-        ws.onopen = () => {
-          fitAddon.fit();
+      ws.onmessage = (event) => {
+        terminal.write(event.data);
+      };
+
+      ws.onclose = () => {
+        terminal.write("\r\n\x1b[90m[Terminal disconnected]\x1b[0m\r\n");
+      };
+
+      terminal.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        }
+      });
+
+      // Auto-fit on container resize (skip zero-size to avoid killing server PTY)
+      const resizeObserver = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (!entry || entry.contentRect.width === 0 || entry.contentRect.height === 0) return;
+        fitAddon.fit();
+        if (ws.readyState === WebSocket.OPEN && terminal.cols > 0 && terminal.rows > 0) {
           ws.send(
             JSON.stringify({
               type: "resize",
@@ -62,49 +111,19 @@ export function TerminalPanel({ workspaceId, visible }: TerminalPanelProps) {
               rows: terminal.rows,
             }),
           );
-        };
+        }
+      });
+      resizeObserver.observe(containerRef.current!);
 
-        ws.onmessage = (event) => {
-          terminal.write(event.data);
-        };
-
-        ws.onclose = () => {
-          terminal.write("\r\n\x1b[90m[Terminal disconnected]\x1b[0m\r\n");
-        };
-
-        terminal.onData((data) => {
-          if (ws.readyState === WebSocket.OPEN) {
-            ws.send(data);
-          }
-        });
-
-        // Auto-fit on container resize (skip zero-size to avoid killing server PTY)
-        const resizeObserver = new ResizeObserver((entries) => {
-          const entry = entries[0];
-          if (!entry || entry.contentRect.width === 0 || entry.contentRect.height === 0) return;
-          fitAddon.fit();
-          if (ws.readyState === WebSocket.OPEN && terminal.cols > 0 && terminal.rows > 0) {
-            ws.send(
-              JSON.stringify({
-                type: "resize",
-                cols: terminal.cols,
-                rows: terminal.rows,
-              }),
-            );
-          }
-        });
-        resizeObserver.observe(containerRef.current!);
-
-        cleanup = () => {
-          resizeObserver.disconnect();
-          ws.close();
-          terminal.dispose();
-          terminalRef.current = null;
-          fitAddonRef.current = null;
-          wsRef.current = null;
-        };
-      },
-    );
+      cleanup = () => {
+        resizeObserver.disconnect();
+        ws.close();
+        terminal.dispose();
+        terminalRef.current = null;
+        fitAddonRef.current = null;
+        wsRef.current = null;
+      };
+    });
 
     return () => {
       cancelled = true;

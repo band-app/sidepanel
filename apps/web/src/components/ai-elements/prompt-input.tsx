@@ -8,7 +8,6 @@ import type {
   FormEventHandler,
   HTMLAttributes,
   KeyboardEventHandler,
-  ReactNode,
   RefObject,
 } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -351,56 +350,6 @@ export type PromptInputTextareaProps = HTMLAttributes<HTMLTextAreaElement> & {
   onPreviousMessage?: () => string | undefined;
 };
 
-/**
- * Build highlighted segments from the input text, colouring any
- * `/<command>` token blue. A command token is a `/` at position 0 or
- * preceded by whitespace, followed by word-chars / colons / dots / hyphens.
- */
-function highlightSlashCommands(text: string): ReactNode[] {
-  const segments: ReactNode[] = [];
-  const regex = /(?:^|\s)(\/[\w:.+-]+)/g;
-  let lastIndex = 0;
-  let match = regex.exec(text);
-
-  while (match !== null) {
-    const commandStr = match[1]; // the /command part
-    const commandStart = match.index + match[0].length - commandStr.length;
-
-    // Plain text before the command
-    if (commandStart > lastIndex) {
-      segments.push(text.slice(lastIndex, commandStart));
-    }
-
-    // Command in blue
-    segments.push(
-      <span key={commandStart} className="text-blue-600 dark:text-blue-400">
-        {commandStr}
-      </span>,
-    );
-    lastIndex = commandStart + commandStr.length;
-    match = regex.exec(text);
-  }
-
-  // Remaining plain text
-  if (lastIndex < text.length) {
-    segments.push(text.slice(lastIndex));
-  }
-
-  return segments;
-}
-
-/**
- * Detect whether the ghost argument-hint should be shown.
- * The hint appears when a slash command token is followed by exactly one
- * trailing space with nothing typed after it — works for mid-text commands
- * too (e.g. "please /band:start ").
- */
-function shouldShowGhostHint(inputValue: string, commandHint: string | null): boolean {
-  if (!commandHint) return false;
-  // Match a command token (at start or after space) followed by a single trailing space
-  return /(?:^|\s)\/[\w:.+-]+ $/.test(inputValue);
-}
-
 export const PromptInputTextarea = ({
   className,
   placeholder = "Type a message...",
@@ -409,7 +358,7 @@ export const PromptInputTextarea = ({
   ...props
 }: PromptInputTextareaProps) => {
   const [isComposing, setIsComposing] = useState(false);
-  const { onTextChange, textareaRef, setTextareaValue, commandHint, inputValue } =
+  const { onTextChange, textareaRef, setTextareaValue, inputValue } =
     useContext(PromptInputContext);
 
   const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = useCallback(
@@ -448,6 +397,7 @@ export const PromptInputTextarea = ({
     if (CSS.supports?.("field-sizing", "content")) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+    // biome-ignore lint/correctness/useExhaustiveDependencies: inputValue triggers resize recalc via scrollHeight
   }, [inputValue, textareaRef]);
 
   return (

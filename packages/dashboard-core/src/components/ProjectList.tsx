@@ -40,7 +40,7 @@ import {
   Tag,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCapabilities } from "../context";
 import {
   useRemoveProject,
@@ -364,6 +364,8 @@ export function ProjectList({ labelFilter, editMode }: ProjectListProps) {
     }
   }, [hasProjects]);
 
+  const capabilities = useCapabilities();
+
   // ──────────────────────────────────────────────────────────────────────────
   // KEYBOARD NAVIGATION — READ BEFORE MODIFYING
   //
@@ -388,6 +390,18 @@ export function ProjectList({ labelFilter, editMode }: ProjectListProps) {
   // pressing Enter after arrow-key navigation opens the wrong workspace (or
   // no workspace at all, depending on the platform).
   // ──────────────────────────────────────────────────────────────────────────
+  const selectWorkspace = useCallback(
+    (wsId: string) => {
+      const href = capabilities.getWorkspaceHref?.(wsId);
+      if (href && capabilities.navigate) {
+        capabilities.navigate(href);
+      } else {
+        openWorkspace(wsId);
+      }
+    },
+    [capabilities, openWorkspace],
+  );
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (allWorkspaceIds.length === 0) return;
 
@@ -408,10 +422,41 @@ export function ProjectList({ labelFilter, editMode }: ProjectListProps) {
       e.preventDefault();
       if (focusedIndex >= 0 && focusedIndex < allWorkspaceIds.length) {
         keyboardNavRef.current = false;
-        openWorkspace(allWorkspaceIds[focusedIndex]);
+        selectWorkspace(allWorkspaceIds[focusedIndex]);
       }
     }
   }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Cmd+[ / Cmd+] — cycle to previous / next workspace
+  //
+  // This is a global (window-level, capture-phase) shortcut so it fires
+  // regardless of which element has focus.  It follows the same dual-path
+  // as WorkspaceCard: web uses capabilities.navigate(href), Tauri uses
+  // openWorkspace() which triggers IPC.
+  // ──────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key;
+      if (key !== "[" && key !== "]") return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (allWorkspaceIds.length <= 1) return;
+
+      const currentId = activeWorkspaceId;
+      if (!currentId) return;
+      const currentIndex = allWorkspaceIds.indexOf(currentId);
+      if (currentIndex === -1) return;
+
+      const delta = key === "[" ? -1 : 1;
+      const nextIndex = (currentIndex + delta + allWorkspaceIds.length) % allWorkspaceIds.length;
+      selectWorkspace(allWorkspaceIds[nextIndex]);
+    };
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
+  }, [allWorkspaceIds, activeWorkspaceId, selectWorkspace]);
 
   const allProjectNames = useMemo(
     () => visibleGroups.flatMap((g) => g.projects.map((p) => p.name)),

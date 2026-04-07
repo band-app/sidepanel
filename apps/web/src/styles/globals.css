@@ -3,6 +3,7 @@
 
 @source "../../../../packages/dashboard-core/src";
 @source "../../../../packages/ui/src";
+@source "../../node_modules/streamdown/dist";
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant standalone (@media (display-mode: standalone));

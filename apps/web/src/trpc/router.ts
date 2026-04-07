@@ -979,7 +979,7 @@ const workspaceRouter = t.router({
 
       // Update workspace status with the new coding agent ID
       upsertWorkspaceStatus(input.workspaceId, {
-        status: "idle",
+        status: "waiting",
         codingAgentId: input.agentId,
       });
 
@@ -1406,6 +1406,9 @@ const statusesRouter = t.router({
     .mutation(({ input }) => {
       const existing = getWorkspaceStatus(input.workspaceId);
       if (existing?.agent?.status !== "needs_attention") {
+        if (existing) {
+          emit({ kind: "update", status: existing });
+        }
         return { ok: true };
       }
       const status = upsertWorkspaceStatus(input.workspaceId, { status: "waiting" });

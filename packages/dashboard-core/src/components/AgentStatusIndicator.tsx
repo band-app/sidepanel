@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function AgentStatusIndicator({ agent, isActive }: Props) {
-  if (!agent || agent.status === "waiting") {
+  if (!agent || (agent.status !== "working" && agent.status !== "needs_attention")) {
     return (
       <GitBranch
         className={`size-3 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}

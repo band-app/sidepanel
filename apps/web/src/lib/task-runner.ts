@@ -156,6 +156,9 @@ export function abortTask(workspaceId: string): boolean {
   broadcast(workspaceId, { type: "finish" });
   tasks.delete(workspaceId);
 
+  const updated = upsertWorkspaceStatus(workspaceId, { status: "waiting" });
+  emitStatusEvent({ kind: "update", status: updated });
+
   log.info({ workspaceId }, "task aborted by user");
   return true;
 }
@@ -176,6 +179,9 @@ export function cancelTask(taskId: string): { cancelled: boolean; workspaceId?: 
       broadcast(workspaceId, { type: "finish" });
       tasks.delete(workspaceId);
 
+      const updated = upsertWorkspaceStatus(workspaceId, { status: "waiting" });
+      emitStatusEvent({ kind: "update", status: updated });
+
       log.info({ workspaceId, taskId }, "task cancelled (was running in-memory)");
       return { cancelled: true, workspaceId };
     }
@@ -184,6 +190,8 @@ export function cancelTask(taskId: string): { cancelled: boolean; workspaceId?: 
   // Not found in memory — try marking the persisted record as failed (orphaned task)
   const record = markTaskFailed(taskId);
   if (record) {
+    const updated = upsertWorkspaceStatus(record.workspaceId, { status: "waiting" });
+    emitStatusEvent({ kind: "update", status: updated });
     log.info({ taskId, workspaceId: record.workspaceId }, "orphaned task cancelled");
     return { cancelled: true, workspaceId: record.workspaceId };
   }

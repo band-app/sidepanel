@@ -390,6 +390,7 @@ export const PromptInputTextarea = ({
 
   // JS fallback for auto-resize when CSS field-sizing-content is not supported
   const MAX_HEIGHT = 192; // matches max-h-48 (48 * 4px)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: inputValue triggers resize recalc via scrollHeight
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -397,7 +398,6 @@ export const PromptInputTextarea = ({
     if (CSS.supports?.("field-sizing", "content")) return;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
-    // biome-ignore lint/correctness/useExhaustiveDependencies: inputValue triggers resize recalc via scrollHeight
   }, [inputValue, textareaRef]);
 
   return (

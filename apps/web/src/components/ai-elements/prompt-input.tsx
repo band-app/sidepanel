@@ -439,8 +439,16 @@ export const PromptInputTextarea = ({
     [isComposing, onEscape, onPreviousMessage, setTextareaValue],
   );
 
-  const hasSlashCommand = inputValue.includes("/");
-  const showGhostHint = shouldShowGhostHint(inputValue, commandHint);
+  // JS fallback for auto-resize when CSS field-sizing-content is not supported
+  const MAX_HEIGHT = 192; // matches max-h-48 (48 * 4px)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    // Check if field-sizing-content is natively supported
+    if (CSS.supports?.("field-sizing", "content")) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_HEIGHT)}px`;
+  }, [inputValue, textareaRef]);
 
   return (
     <div className="relative">
@@ -451,7 +459,6 @@ export const PromptInputTextarea = ({
         spellCheck={false}
         className={cn(
           "min-h-[44px] lg:min-h-[36px] max-h-48 w-full resize-none overflow-y-auto bg-transparent px-2 py-2.5 lg:py-2 text-base lg:text-sm outline-none placeholder:text-muted-foreground field-sizing-content",
-          hasSlashCommand && "text-transparent caret-foreground",
           className,
         )}
         name="message"
@@ -462,15 +469,6 @@ export const PromptInputTextarea = ({
         placeholder={placeholder}
         {...props}
       />
-      {hasSlashCommand && (
-        <div
-          className="pointer-events-none absolute top-0 left-0 min-h-[44px] lg:min-h-[36px] w-full whitespace-pre-wrap break-words px-2 py-2.5 lg:py-2 text-base lg:text-sm text-foreground"
-          aria-hidden
-        >
-          {highlightSlashCommands(inputValue)}
-          {showGhostHint && <span className="text-muted-foreground/50">{commandHint}</span>}
-        </div>
-      )}
     </div>
   );
 };

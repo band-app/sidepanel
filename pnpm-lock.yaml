@@ -38,12 +38,6 @@ importers:
 
   apps/dashboard:
     dependencies:
-      '@band-app/dashboard-core':
-        specifier: workspace:^
-        version: link:../../packages/dashboard-core
-      '@band-app/ui':
-        specifier: workspace:^
-        version: link:../../packages/ui
       react:
         specifier: ^19.0.0
         version: 19.2.4

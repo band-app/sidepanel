@@ -814,7 +814,7 @@ fn notify_post_tool_use_after_ask_user_restores_working() {
 }
 
 #[test]
-fn notify_permission_request_sets_needs_attention() {
+fn notify_permission_request_sets_working() {
     let env = TestEnv::new();
     let payload = serde_json::json!({
         "hook_event_name": "PermissionRequest",
@@ -827,8 +827,8 @@ fn notify_permission_request_sets_needs_attention() {
     let status = query_agent_status(&env.band_dir, "my-project-main");
     assert_eq!(
         status.as_deref(),
-        Some("needs_attention"),
-        "PermissionRequest should set needs_attention"
+        Some("working"),
+        "PermissionRequest should set working (not needs_attention)"
     );
 }
 

@@ -686,7 +686,7 @@ export function DiffView({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="uncommitted">Uncommitted</SelectItem>
-              <SelectItem value="branch">vs {baseBranch ?? "base"}</SelectItem>
+              <SelectItem value="branch">{baseBranch ?? "base"}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -756,7 +756,7 @@ export function DiffView({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="uncommitted">Uncommitted</SelectItem>
-              <SelectItem value="branch">vs {baseBranch ?? "base"}</SelectItem>
+              <SelectItem value="branch">{baseBranch ?? "base"}</SelectItem>
             </SelectContent>
           </Select>
           <div className="hidden items-center rounded-md border border-border/50 bg-muted/50 md:flex">

@@ -239,7 +239,7 @@ function DroppableLabelHeader({ labelId, label }: { labelId: string; label: Labe
   return (
     <div
       ref={setNodeRef}
-      className={`flex items-center gap-2 px-3 py-2.5 mb-1 transition-colors ${isOver ? "bg-primary/20" : "bg-accent"}`}
+      className={`flex items-center gap-2 px-3 py-1.5 mb-0.5 transition-colors ${isOver ? "bg-primary/20" : "bg-accent"}`}
     >
       <span className="size-2.5 rounded-full shrink-0" style={{ backgroundColor: label.color }} />
       <span className="text-sm font-semibold text-foreground/80">{label.name}</span>
@@ -252,7 +252,7 @@ function DroppableUnlabeledHeader() {
   return (
     <div
       ref={setNodeRef}
-      className={`flex items-center gap-2 px-3 py-2.5 mb-1 transition-colors ${isOver ? "bg-primary/20" : "bg-accent"}`}
+      className={`flex items-center gap-2 px-3 py-1.5 mb-0.5 transition-colors ${isOver ? "bg-primary/20" : "bg-accent"}`}
     >
       <span className="text-sm font-semibold text-foreground/80">Unlabeled</span>
     </div>
@@ -483,7 +483,7 @@ export function ProjectList({ labelFilter, editMode }: ProjectListProps) {
         onPointerDown={() => {
           keyboardNavRef.current = false;
         }}
-        className="flex flex-col gap-1 outline-none min-w-0"
+        className="flex flex-col gap-0.5 outline-none min-w-0"
       >
         <DndContext
           sensors={sensors}

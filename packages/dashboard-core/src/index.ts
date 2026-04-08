@@ -16,6 +16,7 @@ export { GitStatusIndicator } from "./components/GitStatusIndicator";
 export { NewWorkspaceDialog } from "./components/NewWorkspaceForm";
 export { ProjectList } from "./components/ProjectList";
 export { QuickOpenDialog } from "./components/QuickOpenDialog";
+export { SearchBar, type SearchBarHandle, type SearchOptions } from "./components/SearchBar";
 export { SearchFilesDialog } from "./components/SearchFilesDialog";
 export { SettingsPage } from "./components/SettingsPage";
 export { SetupStatusIndicator } from "./components/SetupStatusIndicator";
@@ -34,6 +35,7 @@ export {
   useUpdateProjectLabel,
 } from "./hooks/use-project-mutations";
 export { useProjects } from "./hooks/use-projects";
+export { type UseSearchReturn, useSearch } from "./hooks/use-search";
 export { useUpdateSettings } from "./hooks/use-settings-mutations";
 export { useSettingsQuery } from "./hooks/use-settings-query";
 // Hooks
@@ -43,7 +45,12 @@ export {
   useSetupStatusWatcher,
   useStatusWatcher,
 } from "./hooks/use-status";
-export { openFileSearchPanel } from "./lib/codemirror-setup";
+export {
+  clearSearch,
+  collectSearchMatches,
+  dispatchSearch,
+  scrollToSearchMatch,
+} from "./lib/codemirror-setup";
 export { type FileLocation, formatFileLocation, parseFileLocation } from "./lib/file-location";
 export { extensionToLanguage, filenameToLanguage } from "./lib/language-map";
 export { isServiceHealthy, type ServiceHealth } from "./lib/service-health";

@@ -54,6 +54,7 @@ export {
 export { getFileIcon } from "./lib/file-icon";
 export { type FileLocation, formatFileLocation, parseFileLocation } from "./lib/file-location";
 export { extensionToLanguage, filenameToLanguage } from "./lib/language-map";
+export type { SelectionToChatDetail } from "./lib/selection-to-chat";
 export { isServiceHealthy, type ServiceHealth } from "./lib/service-health";
 // Lib
 export { playSound, SOUNDS, type SoundId } from "./lib/sounds";

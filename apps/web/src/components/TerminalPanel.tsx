@@ -37,6 +37,7 @@ export function TerminalPanel({ workspaceId, terminalId, visible }: TerminalPane
         fontSize: 13,
         fontFamily: "'SF Mono', Menlo, Monaco, 'Courier New', monospace",
         macOptionIsMeta: true, // Alt+Left/Right → word navigation on macOS
+        scrollback: 10000,
         theme: {
           background: "#181818",
           foreground: "#e8e8e8",
@@ -161,7 +162,7 @@ export function TerminalPanel({ workspaceId, terminalId, visible }: TerminalPane
 
   return (
     <div className="relative h-full w-full">
-      <div ref={containerRef} className="absolute inset-1 overflow-hidden" />
+      <div ref={containerRef} className="absolute inset-2 overflow-hidden" />
     </div>
   );
 }

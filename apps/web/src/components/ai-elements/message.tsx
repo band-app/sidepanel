@@ -9,7 +9,12 @@ import type { ComponentProps, HTMLAttributes } from "react";
 import { memo, useCallback, useState } from "react";
 import { Streamdown } from "streamdown";
 
-import { streamdownComponents } from "../streamdown-components";
+import {
+  fileLinkComponents,
+  fileLinkRehypePlugins,
+  fileLinkRemarkPlugins,
+  fileLinkUrlTransform,
+} from "./file-link-components";
 import { FilePreviewOverlay } from "./file-preview-overlay";
 import { downloadFile, isTextMediaType } from "./file-preview-utils";
 
@@ -57,7 +62,10 @@ export const MessageResponse = memo(
         className,
       )}
       plugins={streamdownPlugins}
-      components={streamdownComponents}
+      components={fileLinkComponents}
+      remarkPlugins={fileLinkRemarkPlugins}
+      rehypePlugins={fileLinkRehypePlugins}
+      urlTransform={fileLinkUrlTransform}
       {...props}
     />
   ),

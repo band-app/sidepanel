@@ -1,6 +1,7 @@
 import {
   type DiffStats,
   DiffView,
+  parseFileLocation,
   QuickOpenDialog,
   SearchFilesDialog,
 } from "@band-app/dashboard-core";
@@ -586,7 +587,10 @@ export function DockviewWorkspaceLayout({
 
   // Open file from Changes panel or dialogs → activate Files panel
   const handleOpenFile = useCallback((filename: string) => {
-    setCurrentFile(filename);
+    // Store clean path (without line refs) as currentFile so that
+    // go-to-line (:N) in quick open works correctly.
+    const cleanPath = parseFileLocation(filename).filePath;
+    setCurrentFile(cleanPath);
     setOpenFilePath(filename);
     const api = apiRef.current;
     if (api) {

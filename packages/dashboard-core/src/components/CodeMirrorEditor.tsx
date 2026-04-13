@@ -2,7 +2,14 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { useIsDark } from "../hooks/use-is-dark";
-import { baseEditorExtensions, loadLanguage, searchHighlightOnly } from "../lib/codemirror-setup";
+import {
+  baseEditorExtensions,
+  lineHighlightExtension,
+  loadLanguage,
+  scrollToLine,
+  searchHighlightOnly,
+  setHighlightLines,
+} from "../lib/codemirror-setup";
 import { selectionToChatExtension } from "../lib/selection-to-chat";
 
 interface CodeMirrorEditorProps {
@@ -12,6 +19,12 @@ interface CodeMirrorEditorProps {
   className?: string;
   /** Workspace-relative file path — enables "Add to Chat" on text selection */
   filePath?: string;
+  /** 1-based line number to scroll to and highlight */
+  line?: number;
+  /** 1-based end line for range highlighting */
+  lineEnd?: number;
+  /** 1-based column offset */
+  column?: number;
   /** Called when the EditorView is created or destroyed */
   onEditorView?: (view: EditorView | null) => void;
   /** Called whenever the document content changes */
@@ -25,6 +38,9 @@ export function CodeMirrorEditor({
   language,
   className,
   filePath,
+  line,
+  lineEnd,
+  column,
   onEditorView,
   onContentChange,
   onSave,
@@ -38,6 +54,14 @@ export function CodeMirrorEditor({
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
   const isDark = useIsDark();
+
+  // Store line props in refs so the creation effect can read them without re-running
+  const lineRef = useRef(line);
+  const lineEndRef = useRef(lineEnd);
+  const columnRef = useRef(column);
+  lineRef.current = line;
+  lineEndRef.current = lineEnd;
+  columnRef.current = column;
 
   // Store content in a ref so the editor creation effect reads the latest
   // value without re-running on every content prop change.
@@ -68,6 +92,7 @@ export function CodeMirrorEditor({
       const extensions = [
         ...baseEditorExtensions(isDark, () => onSaveRef.current?.()),
         searchHighlightOnly(),
+        ...lineHighlightExtension(isDark),
         // Listener for content changes
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -92,6 +117,11 @@ export function CodeMirrorEditor({
         parent: container,
       });
 
+      // Scroll to line after creation
+      if (lineRef.current) {
+        scrollToLine(viewRef.current, lineRef.current, lineEndRef.current, columnRef.current);
+      }
+
       onEditorViewRef.current?.(viewRef.current);
     };
 
@@ -106,6 +136,19 @@ export function CodeMirrorEditor({
       }
     };
   }, [language, isDark, filePath]);
+
+  // Handle line/lineEnd/column changes without recreating the editor
+  useEffect(() => {
+    if (!viewRef.current) return;
+    if (line) {
+      scrollToLine(viewRef.current, line, lineEnd, column);
+    } else {
+      // Clear highlight when line is removed
+      viewRef.current.dispatch({
+        effects: setHighlightLines.of(null),
+      });
+    }
+  }, [line, lineEnd, column]);
 
   return <div ref={containerRef} className={className} />;
 }

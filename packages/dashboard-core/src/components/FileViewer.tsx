@@ -345,6 +345,9 @@ export function FileViewer({
               language={lang}
               className="h-full"
               filePath={filePath}
+              line={line}
+              lineEnd={lineEnd}
+              column={column}
               onEditorView={onEditorView}
               onContentChange={handleContentChange}
               onSave={handleSave}

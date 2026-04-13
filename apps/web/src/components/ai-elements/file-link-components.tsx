@@ -356,7 +356,15 @@ const FILE_PATH_WITH_LINE_RE =
   /(?:^|(?<=[\s(,[\]]))(?:\.{0,2}\/)?(?:[a-zA-Z0-9_@./-]*\/)?[a-zA-Z0-9_.-]+\.[a-zA-Z0-9]+:\d+(?:[-:]\d+)?(?=$|[\s),.\]!?;])/g;
 
 /** Node types whose children should not be processed */
-const SKIP_PARENTS = new Set(["code", "inlineCode", "link", "linkReference"]);
+const SKIP_PARENTS = new Set([
+  "code",
+  "inlineCode",
+  "link",
+  "linkReference",
+  "table",
+  "tableRow",
+  "tableCell",
+]);
 
 // biome-ignore lint/suspicious/noExplicitAny: unified plugin operates on untyped AST nodes
 type MdastNode = any;

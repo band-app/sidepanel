@@ -7,7 +7,7 @@ import type { UIMessage } from "ai";
 import { Download, Expand, FileIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes } from "react";
 import { memo, useCallback, useState } from "react";
-import { Streamdown, defaultRehypePlugins, defaultRemarkPlugins } from "streamdown";
+import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from "streamdown";
 
 import {
   fileLinkComponents,

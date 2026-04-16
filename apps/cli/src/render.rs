@@ -382,7 +382,7 @@ impl Renderer {
             .and_then(|t| t.as_str())
             .unwrap_or("Unknown error");
         let a = &self.ansi;
-        eprintln!("\n{}{}Error:{} {text}", a.red(), a.bold(), a.reset(),);
+        eprintln!("\n{}{}Error:{} {text}", a.red(), a.bold(), a.reset());
         self.task_succeeded = false;
     }
 
@@ -434,7 +434,7 @@ impl Renderer {
                 a.reset(),
             );
         } else {
-            eprintln!("\n{}{}Task completed.{}", a.green(), a.bold(), a.reset(),);
+            eprintln!("\n{}{}Task completed.{}", a.green(), a.bold(), a.reset());
         }
     }
 
@@ -443,9 +443,9 @@ impl Renderer {
     fn display_plan_review(&self, plan: &str) {
         let a = &self.ansi;
         let separator = "\u{2500}".repeat(50);
-        eprintln!("\n  {}{}{separator}{}", a.cyan(), a.bold(), a.reset(),);
-        eprintln!("  {}{}  Plan Review{}", a.cyan(), a.bold(), a.reset(),);
-        eprintln!("  {}{}{separator}{}", a.cyan(), a.bold(), a.reset(),);
+        eprintln!("\n  {}{}{separator}{}", a.cyan(), a.bold(), a.reset());
+        eprintln!("  {}{}  Plan Review{}", a.cyan(), a.bold(), a.reset());
+        eprintln!("  {}{}{separator}{}", a.cyan(), a.bold(), a.reset());
         if !plan.is_empty() {
             eprintln!();
             for line in plan.lines() {
@@ -453,7 +453,7 @@ impl Renderer {
             }
             eprintln!();
         }
-        eprintln!("  {}{}{separator}{}", a.cyan(), a.bold(), a.reset(),);
+        eprintln!("  {}{}{separator}{}", a.cyan(), a.bold(), a.reset());
     }
 
     fn display_questions(&self, questions: &[QuestionData]) {
@@ -461,12 +461,12 @@ impl Renderer {
         let separator = "\u{2500}".repeat(50);
 
         for q in questions {
-            eprintln!("\n  {}{}{separator}{}", a.cyan(), a.bold(), a.reset(),);
+            eprintln!("\n  {}{}{separator}{}", a.cyan(), a.bold(), a.reset());
             if let Some(header) = &q.header {
-                eprintln!("  {}{}  {header}{}", a.cyan(), a.bold(), a.reset(),);
+                eprintln!("  {}{}  {header}{}", a.cyan(), a.bold(), a.reset());
             }
-            eprintln!("  {}{}  {}{}", a.cyan(), a.bold(), q.question, a.reset(),);
-            eprintln!("  {}{}{separator}{}", a.cyan(), a.bold(), a.reset(),);
+            eprintln!("  {}{}  {}{}", a.cyan(), a.bold(), q.question, a.reset());
+            eprintln!("  {}{}{separator}{}", a.cyan(), a.bold(), a.reset());
             for (i, opt) in q.options.iter().enumerate() {
                 let num = i + 1;
                 if let Some(desc) = &opt.description {

@@ -101,7 +101,7 @@ export function DashboardShell({ toolbarExtra, hideTitleBar }: DashboardShellPro
 
   return (
     <div
-      className={`h-dvh w-full overflow-hidden flex flex-col bg-background text-foreground p-0 ${isTauri ? "" : "pt-[env(safe-area-inset-top)]"}`}
+      className={`${hideTitleBar ? "h-full" : "h-dvh"} w-full overflow-hidden flex flex-col bg-background text-foreground p-0 ${isTauri ? "" : "pt-[env(safe-area-inset-top)]"}`}
     >
       {isTauri && !hideTitleBar && (
         <div

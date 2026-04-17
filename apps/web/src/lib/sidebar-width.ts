@@ -23,8 +23,8 @@ export function saveSidebarWidth(width: number): void {
   } catch {}
 }
 
-/** Minimum sidebar size — matches the original fixed w-80 (320px / 20rem) width */
-export const SIDEBAR_MIN_SIZE = "20rem";
+/** Minimum sidebar size (240px / 15rem) */
+export const SIDEBAR_MIN_SIZE = "15rem";
 
 /** Maximum sidebar size as a percentage string (numbers are treated as px by react-resizable-panels) */
 export const SIDEBAR_MAX_SIZE = "60%";

@@ -115,7 +115,7 @@ export function DashboardShell({ toolbarExtra, hideTitleBar }: DashboardShellPro
         </div>
       )}
 
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
+      <div className="@container/toolbar flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-1">
           <DropdownMenu>
             <Tooltip>
@@ -156,12 +156,14 @@ export function DashboardShell({ toolbarExtra, hideTitleBar }: DashboardShellPro
                           backgroundColor: labels.find((l) => l.id === labelFilter)?.color,
                         }}
                       />
-                      {labels.find((l) => l.id === labelFilter)?.name}
+                      <span className="hidden @[20rem]/toolbar:inline">
+                        {labels.find((l) => l.id === labelFilter)?.name}
+                      </span>
                     </>
                   ) : (
                     <>
                       <Tag className="size-5" />
-                      All
+                      <span className="hidden @[20rem]/toolbar:inline">All</span>
                     </>
                   )}
                 </Button>

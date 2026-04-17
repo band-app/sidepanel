@@ -141,7 +141,7 @@ export const WorkspaceCard = memo(function WorkspaceCard({
             <TooltipContent side="top">{worktree.branch}</TooltipContent>
           </Tooltip>
           {!editMode && (
-            <div className="hidden @[12rem]:flex group-hover:flex items-center gap-2 shrink-0 ml-auto pl-2">
+            <div className="hidden @[10rem]:flex group-hover:flex items-center gap-2 shrink-0 ml-auto pl-2">
               <SetupStatusIndicator setup={setupStatus} />
               {branchStatus && <GitStatusIndicator git={branchStatus.git} />}
               {branchStatus && <CIStatusIndicator ci={branchStatus.ci} />}

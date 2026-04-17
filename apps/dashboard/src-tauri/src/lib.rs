@@ -287,8 +287,7 @@ pub fn run() {
                                 .current_monitor()
                                 .ok()
                                 .flatten()
-                                .map(|m| m.scale_factor())
-                                .unwrap_or(1.0);
+                                .map_or(1.0, |m| m.scale_factor());
                             let width = f64::from(size.width) / scale;
                             let mut ws = state::load_window_state();
                             ws.sidebar_width = Some(width);

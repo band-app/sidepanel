@@ -75,10 +75,16 @@ export async function getOrSpawnServer(
   // Build PATH: app node_modules/.bin (where typescript-language-server
   // lives), workspace node_modules/.bin (where tsserver lives), then
   // the user's shell PATH for anything else (node, etc.).
+  //
+  // In development, __dirname is src/lib/ so ../../node_modules/.bin
+  // reaches the project root.  In the bundled DMG, __dirname is dist/
+  // so we need ./node_modules/.bin instead.  Use both so it works in
+  // either environment.
   const appBin = resolve(__dirname, "../../node_modules/.bin");
+  const bundledBin = resolve(__dirname, "node_modules/.bin");
   const workspaceBin = join(cwd, "node_modules/.bin");
   const pathSep = process.platform === "win32" ? ";" : ":";
-  const combinedPath = [appBin, workspaceBin, resolvedPath].join(pathSep);
+  const combinedPath = [bundledBin, appBin, workspaceBin, resolvedPath].join(pathSep);
 
   log.debug("Spawning %s language server in %s for workspace %s", lang, cwd, workspaceId);
 

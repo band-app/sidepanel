@@ -28,6 +28,7 @@ import type { CronjobDefinition } from "../lib/cronjob-types";
 import { fuzzyScore } from "../lib/fuzzy-score";
 import { execGit, gitCmd, listWorktrees } from "../lib/git";
 import { checkHooks, installHooks } from "../lib/hooks";
+import { killWorkspaceServers } from "../lib/lsp-manager";
 import { resolvePendingInput } from "../lib/pending-inputs";
 import { checkPrereqs, shellPath } from "../lib/process-utils";
 import { loadProjectConfig } from "../lib/project-config";
@@ -388,6 +389,9 @@ const workspacesRouter = t.router({
 
             // Kill any running terminal PTY sessions
             killWorkspaceTerminals(workspaceId);
+
+            // Kill any running language server processes
+            killWorkspaceServers(workspaceId);
 
             // Clean up workspace-scoped cronjobs
             stopJobsForKey(workspaceId);

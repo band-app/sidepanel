@@ -54,6 +54,17 @@ export {
   useStatusWatcher,
 } from "./hooks/use-status";
 export {
+  buildLspWsUrl,
+  createLspExtension,
+  getLspLanguageId,
+  hasPendingNavigation,
+  LSP_SUPPORTED_LANGUAGES,
+  releaseLspClient,
+  resolveNavigation,
+  toFileUri,
+  toLspServerLang,
+} from "./lib/codemirror-lsp";
+export {
   clearSearch,
   collectSearchMatches,
   cursorLineTracker,

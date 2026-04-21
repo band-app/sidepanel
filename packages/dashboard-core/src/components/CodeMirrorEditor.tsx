@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { useIsDark } from "../hooks/use-is-dark";
@@ -41,6 +41,8 @@ interface CodeMirrorEditorProps {
   onSave?: () => void;
   /** Called when the user jumps the cursor ≥10 lines (click, Page Up/Down, etc.) */
   onCursorLineChange?: (departureLine: number, arrivalLine: number) => void;
+  /** Optional LSP extension to wire into the editor */
+  lspExtension?: Extension | null;
 }
 
 export function CodeMirrorEditor({
@@ -56,6 +58,7 @@ export function CodeMirrorEditor({
   onContentChange,
   onSave,
   onCursorLineChange,
+  lspExtension,
 }: CodeMirrorEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -67,6 +70,8 @@ export function CodeMirrorEditor({
   onSaveRef.current = onSave;
   const onCursorLineChangeRef = useRef(onCursorLineChange);
   onCursorLineChangeRef.current = onCursorLineChange;
+  const lspExtensionRef = useRef(lspExtension);
+  lspExtensionRef.current = lspExtension;
   const isDark = useIsDark();
 
   // Store line props in refs so the creation effect can read them without re-running
@@ -127,6 +132,9 @@ export function CodeMirrorEditor({
       ];
       if (filePath) {
         extensions.push(selectionToChatExtension(filePath));
+      }
+      if (lspExtensionRef.current) {
+        extensions.push(lspExtensionRef.current);
       }
       if (langSupport) {
         extensions.push(langSupport);

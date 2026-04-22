@@ -28,11 +28,11 @@ const log = createLogger("coding-agent:claude-code");
 const ASK_USER_QUESTION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Read the most recently modified plan file from ~/.band/plans/.
+ * Read the most recently modified plan file from ~/.claude/plans/.
  * Returns the markdown content or undefined if no plan files exist.
  */
 function readLatestPlanFile(): string | undefined {
-  const plansDir = join(homedir(), ".band", "plans");
+  const plansDir = join(homedir(), ".claude", "plans");
   try {
     const files = readdirSync(plansDir)
       .filter((f) => f.endsWith(".md"))

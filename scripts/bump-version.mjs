@@ -16,7 +16,6 @@ const JSON_FILES = [
   "packages/dashboard-core/package.json",
   "packages/coding-agent/package.json",
   "packages/logger/package.json",
-  "packages/shared/package.json",
 ];
 
 const TOML_FILES = [

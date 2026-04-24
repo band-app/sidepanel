@@ -145,7 +145,7 @@ jobs:
           pnpm --filter @band-app/dashboard build
 
       - name: Build DMG and updater artifacts
-        run: pnpm --filter @band-app/dashboard tauri build --ci --config '{"build":{"beforeBuildCommand":""}}' --config apps/dashboard/src-tauri/tauri.prod.conf.json
+        run: pnpm --filter @band-app/dashboard tauri build --ci --config '{"build":{"beforeBuildCommand":""}}' --config src-tauri/tauri.prod.conf.json
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}

@@ -76,7 +76,12 @@ export class CodexAdapter implements CodingAgent {
     options?: RunSessionOptions,
   ): AsyncGenerator<AgentEvent> {
     const effectiveMaxTurns = options?.maxTurns ?? this.maxTurns;
-    const effectiveModel = options?.model ?? this.model;
+    const requestedModel = options?.model ?? this.model;
+    // Only pass models that Codex actually supports. Ignore models from
+    // other providers (e.g. Claude) to let Codex use its own default.
+    const knownModelIds = new Set(CODEX_MODELS.map((m) => m.id));
+    const effectiveModel =
+      requestedModel && knownModelIds.has(requestedModel) ? requestedModel : undefined;
     const mode = options?.mode ?? "edit";
 
     log.info(
@@ -137,10 +142,19 @@ export class CodexAdapter implements CodingAgent {
     let turnCount = 0;
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
+    // Track the actual thread ID from the SDK — sessionId param may be
+    // undefined for new sessions.
+    let actualSessionId = sessionId ?? "";
 
+    const runStreamedStartMs = Date.now();
+    log.info("calling thread.runStreamed");
     let result: { events: AsyncIterable<ThreadEvent> };
     try {
       result = await thread.runStreamed(prompt);
+      log.info(
+        { elapsedMs: Date.now() - runStreamedStartMs },
+        "thread.runStreamed returned successfully",
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error({ err, cwd: this.workspaceDir, model: effectiveModel }, "codex runStreamed failed");
@@ -148,7 +162,7 @@ export class CodexAdapter implements CodingAgent {
       yield {
         type: "session-result",
         success: false,
-        sessionId: sessionId ?? "",
+        sessionId: actualSessionId,
         durationMs: Date.now() - startMs,
         numTurns: 0,
         costUsd: 0,
@@ -172,9 +186,14 @@ export class CodexAdapter implements CodingAgent {
         switch (event.type) {
           // ── Session lifecycle ──────────────────────────────────────────
           case "thread.started": {
+            actualSessionId = event.thread_id ?? sessionId ?? "";
+            log.info(
+              { threadId: event.thread_id, sessionIdParam: sessionId, actualSessionId },
+              "codex thread.started",
+            );
             yield {
               type: "session-start",
-              sessionId: event.thread_id ?? sessionId ?? "",
+              sessionId: actualSessionId,
             };
             break;
           }
@@ -207,7 +226,7 @@ export class CodexAdapter implements CodingAgent {
             yield {
               type: "session-result",
               success: true,
-              sessionId: sessionId ?? "",
+              sessionId: actualSessionId,
               durationMs: Date.now() - startMs,
               numTurns: turnCount,
               costUsd: 0,
@@ -220,7 +239,7 @@ export class CodexAdapter implements CodingAgent {
             yield {
               type: "session-result",
               success: false,
-              sessionId: sessionId ?? "",
+              sessionId: actualSessionId,
               durationMs: Date.now() - startMs,
               numTurns: turnCount,
               costUsd: 0,
@@ -239,7 +258,16 @@ export class CodexAdapter implements CodingAgent {
           }
         }
       }
-      log.info({ turnCount, totalInputTokens, totalOutputTokens }, "codex stream done");
+      log.info(
+        {
+          turnCount,
+          totalInputTokens,
+          totalOutputTokens,
+          actualSessionId,
+          elapsedMs: Date.now() - startMs,
+        },
+        "codex stream done — all events consumed",
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error({ err, cwd: this.workspaceDir }, "codex stream error");
@@ -247,7 +275,7 @@ export class CodexAdapter implements CodingAgent {
       yield {
         type: "session-result",
         success: false,
-        sessionId: sessionId ?? "",
+        sessionId: actualSessionId,
         durationMs: Date.now() - startMs,
         numTurns: turnCount,
         costUsd: 0,

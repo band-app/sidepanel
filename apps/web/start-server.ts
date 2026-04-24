@@ -7,6 +7,7 @@ import sirv from "sirv";
 import { WebSocketServer } from "ws";
 import { createAuthMiddleware, parseCookies, tokensEqual } from "./auth.ts";
 import { stopBranchStatusPoller } from "./src/lib/branch-status-poller.ts";
+import { loadChatsFromDb } from "./src/lib/chat-manager.ts";
 import { startCronjobScheduler, stopCronjobScheduler } from "./src/lib/cronjob-scheduler.ts";
 import { closeDb } from "./src/lib/db/connection.ts";
 import { runMigrations } from "./src/lib/db/migrate.ts";
@@ -157,6 +158,10 @@ function serveWorkspaceFile(res: ServerResponse, workspaceId: string, rawPath: s
 async function main() {
   // Run database migrations before anything else
   runMigrations();
+
+  // Hydrate in-memory chat pane maps from DB, resetting statuses to "idle"
+  // since no agent can be running on a fresh server start.
+  loadChatsFromDb();
 
   // Mark any persisted "running" tasks as "failed" — no agent can be running
   // if the server just started.

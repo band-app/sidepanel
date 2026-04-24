@@ -45,7 +45,12 @@ export class GeminiCliAdapter implements CodingAgent {
     options?: RunSessionOptions,
   ): AsyncGenerator<AgentEvent> {
     const effectiveMaxTurns = options?.maxTurns ?? this.maxTurns;
-    const effectiveModel = options?.model ?? this.model;
+    const requestedModel = options?.model ?? this.model;
+    // Only pass models that Gemini CLI supports. Ignore models from other
+    // providers (e.g. Claude/GPT) to let Gemini use its own default.
+    const knownGeminiModels = new Set(this.listModels().map((m) => m.id));
+    const effectiveModel =
+      requestedModel && knownGeminiModels.has(requestedModel) ? requestedModel : undefined;
 
     log.info(
       {
@@ -69,6 +74,13 @@ export class GeminiCliAdapter implements CodingAgent {
       env: { ...process.env },
     });
     this.activeChild = child;
+
+    // Capture spawn errors (e.g. ENOENT when binary is not found).
+    let spawnError: Error | null = null;
+    child.on("error", (err) => {
+      spawnError = err;
+      log.error({ err, executable: this.executablePath }, "gemini spawn error");
+    });
 
     const startMs = Date.now();
     let turnCount = 0;
@@ -151,7 +163,22 @@ export class GeminiCliAdapter implements CodingAgent {
         child.on("close", (code) => resolve(code ?? 0));
       });
 
-      if (exitCode !== 0) {
+      if (spawnError) {
+        const errMsg =
+          (spawnError as NodeJS.ErrnoException).code === "ENOENT"
+            ? `Gemini CLI executable not found: "${this.executablePath}". Is it installed and on your PATH?`
+            : `Gemini CLI failed to start: ${(spawnError as Error).message}`;
+        yield { type: "error", message: errMsg };
+        yield {
+          type: "session-result",
+          success: false,
+          sessionId,
+          durationMs: Date.now() - startMs,
+          numTurns: 0,
+          costUsd: 0,
+          errors: [errMsg],
+        };
+      } else if (exitCode !== 0) {
         log.warn({ exitCode }, "gemini process exited with non-zero code");
       }
 

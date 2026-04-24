@@ -134,6 +134,7 @@ function splitMessageAtQueueBoundaries(parts: UIMessageParts): QueueSegment[] {
 
 interface ChatViewProps {
   workspaceId: string;
+  chatId: string;
   workspaceName: string;
   supportsSessionListing: boolean;
   initialSessionId?: string;
@@ -143,6 +144,8 @@ interface ChatViewProps {
   onShowSessionListChange: (show: boolean) => void;
   onStreamingChange?: (streaming: boolean) => void;
   onNewSessionRef?: React.MutableRefObject<(() => void) | null>;
+  /** Called when the active session changes (user picks one, or a new one starts). */
+  onActiveSessionChange?: (sessionId: string | undefined) => void;
   chatKey?: number;
   agentType?: string;
   codingAgentId?: string;
@@ -153,6 +156,7 @@ interface ChatViewProps {
 
 export function ChatView({
   workspaceId,
+  chatId,
   workspaceName,
   supportsSessionListing,
   initialSessionId,
@@ -161,6 +165,7 @@ export function ChatView({
   onShowSessionListChange,
   onStreamingChange,
   onNewSessionRef,
+  onActiveSessionChange,
   chatKey = 0,
   agentType,
   codingAgentId,
@@ -212,31 +217,46 @@ export function ChatView({
   >([]);
   useEffect(() => {
     trpc.skills.list
-      .query({ workspaceId })
+      .query({ workspaceId, chatId })
       .then((data) => setSkills(data.skills))
       .catch(() => setSkills([]));
-  }, [workspaceId]);
+  }, [workspaceId, chatId]);
 
   const [modes, setModes] = useState<{ id: string; name: string; description?: string }[]>([]);
   const [selectedMode, setSelectedMode] = useState<string | undefined>();
-  const handleModeSelect = useCallback((mode: string | undefined) => {
-    setSelectedMode(mode);
-  }, []);
+  const handleModeSelect = useCallback(
+    (mode: string | undefined) => {
+      setSelectedMode(mode);
+      trpc.chats.update
+        .mutate({ chatId, mode: mode ?? "" })
+        .catch((err) => console.error("[ChatView] error persisting mode:", err));
+    },
+    [chatId],
+  );
   useEffect(() => {
     trpc.modes.list
       .query({ agentId: codingAgentId || undefined })
       .then((data) => setModes(data.modes as { id: string; name: string; description?: string }[]))
       .catch(() => setModes([]));
-    // Derive mode from active task (e.g. reconnecting to a running plan-mode task)
-    trpc.tasks.get
-      .query({ workspaceId })
+    // Hydrate persisted mode from the chat record, or derive from active task
+    trpc.chats.get
+      .query({ chatId })
       .then((data) => {
-        if (data.task?.mode && data.task.status === "running") {
-          handleModeSelect(data.task.mode);
+        const persisted = data.chat?.mode;
+        if (typeof persisted === "string" && persisted) {
+          setSelectedMode(persisted);
         }
       })
       .catch(() => {});
-  }, [workspaceId, codingAgentId, handleModeSelect]);
+    trpc.tasks.get
+      .query({ workspaceId, chatId })
+      .then((data) => {
+        if (data.task?.mode && data.task.status === "running") {
+          setSelectedMode(data.task.mode);
+        }
+      })
+      .catch(() => {});
+  }, [workspaceId, chatId, codingAgentId]);
 
   // Listen for Shift+Tab mode toggle dispatched from the workspace layout
   useEffect(() => {
@@ -259,14 +279,37 @@ export function ChatView({
   const selectedModel = userModelOverride ?? agentDefaultModel;
 
   useEffect(() => {
-    trpc.models.list
+    const modelsP = trpc.models.list
       .query({ agentId: codingAgentId || undefined })
       .then((data) => {
         setModels(data.models as { id: string; name: string; description?: string }[]);
         setAgentDefaultModel((data.defaultModel as string) || undefined);
       })
       .catch(() => setModels([]));
-  }, [codingAgentId]);
+
+    // Hydrate persisted model override from the chat record
+    const chatP = trpc.chats.get
+      .query({ chatId })
+      .then((data) => {
+        const persisted = data.chat?.model;
+        if (typeof persisted === "string" && persisted) {
+          setUserModelOverride(persisted);
+        }
+      })
+      .catch(() => {});
+
+    void Promise.all([modelsP, chatP]);
+  }, [codingAgentId, chatId]);
+
+  const handleModelSelect = useCallback(
+    (model: string | undefined) => {
+      setUserModelOverride(model);
+      trpc.chats.update
+        .mutate({ chatId, model: model ?? "" })
+        .catch((err) => console.error("[ChatView] error persisting model:", err));
+    },
+    [chatId],
+  );
 
   const [queuedMessages, setQueuedMessages] = useState<string[]>([]);
 
@@ -275,25 +318,25 @@ export function ChatView({
   // remove, clear) so the frontend always has the authoritative state.
   useEffect(() => {
     const subscription = trpc.queue.stream.subscribe(
-      { workspaceId },
+      { workspaceId, chatId },
       {
         onData(data: { messages: string[] }) {
-          console.log("subscribe", data.messages);
           setQueuedMessages(data.messages);
         },
       },
     );
     return () => subscription.unsubscribe();
-  }, [workspaceId]);
+  }, [workspaceId, chatId]);
 
   const transport = useMemo(
     () =>
       new TaskChatTransport(
         workspaceId,
+        chatId,
         () => sessionIdRef.current,
         () => lastEventIdRef.current,
       ),
-    [workspaceId],
+    [workspaceId, chatId],
   );
 
   useEffect(() => {
@@ -309,7 +352,7 @@ export function ChatView({
   }, [transport, codingAgentId]);
 
   const { messages, sendMessage, status, setMessages, stop, resumeStream } = useChat({
-    id: `${workspaceId}:${chatKey}`,
+    id: `${chatId}:${chatKey}`,
     transport,
     // Don't auto-resume — we control when to resume so that sessionIdRef
     // and lastEventIdRef are populated first (from loadMessages).
@@ -327,7 +370,9 @@ export function ChatView({
         typeof dataPart.data === "object" &&
         "sessionId" in (dataPart.data as Record<string, unknown>)
       ) {
-        sessionIdRef.current = (dataPart.data as { sessionId: string }).sessionId;
+        const sid = (dataPart.data as { sessionId: string }).sessionId;
+        sessionIdRef.current = sid;
+        onActiveSessionChange?.(sid);
       }
     },
   });
@@ -417,6 +462,7 @@ export function ChatView({
       try {
         const data = await trpc.sessions.messages.query({
           workspaceId,
+          chatId,
           sessionId,
         });
         setMessages(data.messages as UIMessage[]);
@@ -430,7 +476,7 @@ export function ChatView({
       // If no task is running, reconnectToStream returns null and this is a no-op.
       resumeStream();
     },
-    [workspaceId, setMessages, resumeStream, stop],
+    [workspaceId, chatId, setMessages, resumeStream, stop],
   );
 
   // Load older messages when the user scrolls to the top of the chat.
@@ -445,6 +491,7 @@ export function ChatView({
     try {
       const data = await trpc.sessions.messages.query({
         workspaceId,
+        chatId,
         sessionId,
         beforeEventId,
         limit: 100,
@@ -468,7 +515,7 @@ export function ChatView({
     } finally {
       setLoadingOlder(false);
     }
-  }, [workspaceId, hasMore, loadingOlder, loadingHistory, setMessages]);
+  }, [workspaceId, chatId, hasMore, loadingOlder, loadingHistory, setMessages]);
 
   // Restore scroll position after prepending older messages so the user's
   // viewport doesn't jump. Fires synchronously before the browser paints.
@@ -541,13 +588,22 @@ export function ChatView({
       firstEventIdRef.current = undefined;
       setHasMore(false);
       setActiveSessionId(sessionId);
+      onActiveSessionChange?.(sessionId);
       setMessages([]);
       setQueuedMessages([]);
-      trpc.queue.clear.mutate({ workspaceId }).catch(() => {});
+      trpc.queue.clear.mutate({ workspaceId, chatId }).catch(() => {});
       onShowSessionListChange(false);
       await loadMessages(sessionId);
     },
-    [loadMessages, setMessages, stop, onShowSessionListChange, workspaceId],
+    [
+      loadMessages,
+      setMessages,
+      stop,
+      onShowSessionListChange,
+      onActiveSessionChange,
+      workspaceId,
+      chatId,
+    ],
   );
 
   const handleNewSession = useCallback(() => {
@@ -557,11 +613,12 @@ export function ChatView({
     firstEventIdRef.current = undefined;
     setHasMore(false);
     setActiveSessionId(undefined);
+    onActiveSessionChange?.(undefined);
     setMessages([]);
     setQueuedMessages([]);
-    trpc.queue.clear.mutate({ workspaceId }).catch(() => {});
+    trpc.queue.clear.mutate({ workspaceId, chatId }).catch(() => {});
     onShowSessionListChange(false);
-  }, [setMessages, stop, onShowSessionListChange, workspaceId]);
+  }, [setMessages, stop, onShowSessionListChange, onActiveSessionChange, workspaceId, chatId]);
 
   useEffect(() => {
     if (onNewSessionRef) {
@@ -577,9 +634,9 @@ export function ChatView({
   const queueMessage = useCallback(
     (text: string) => {
       setQueuedMessages((prev) => [...prev, text]);
-      trpc.queue.push.mutate({ workspaceId, text }).catch(() => {});
+      trpc.queue.push.mutate({ workspaceId, chatId, text }).catch(() => {});
     },
-    [workspaceId],
+    [workspaceId, chatId],
   );
 
   const handleSubmit = useCallback(
@@ -596,7 +653,7 @@ export function ChatView({
       // Check if a task is running in the background (e.g. started from CLI
       // or another tab) that this chat doesn't know about yet.
       try {
-        const { task } = await trpc.tasks.get.query({ workspaceId });
+        const { task } = await trpc.tasks.get.query({ workspaceId, chatId });
         if (task && task.status === "running") {
           queueMessage(message.text);
           return;
@@ -608,7 +665,7 @@ export function ChatView({
 
       doSendMessage(message);
     },
-    [doSendMessage, isStreaming, workspaceId, queueMessage],
+    [doSendMessage, isStreaming, workspaceId, chatId, queueMessage],
   );
 
   const handleCancelQueued = useCallback(
@@ -619,13 +676,11 @@ export function ChatView({
         if (idx === -1) return prev;
         const messages = [...prev.slice(0, idx), ...prev.slice(idx + 1)];
 
-        console.log("cancel", text, messages);
-
         return messages;
       });
-      trpc.queue.remove.mutate({ workspaceId, text }).catch(() => {});
+      trpc.queue.remove.mutate({ workspaceId, chatId, text }).catch(() => {});
     },
-    [workspaceId],
+    [workspaceId, chatId],
   );
 
   const taskMap: TaskMap = useMemo(() => {
@@ -669,8 +724,10 @@ export function ChatView({
     return (
       <SessionList
         workspaceId={workspaceId}
+        chatId={chatId}
         activeSessionId={activeSessionId ?? sessionIdRef.current}
         onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
       />
     );
   }
@@ -901,7 +958,7 @@ export function ChatView({
                 <ModelMenu
                   models={models}
                   selected={selectedModel}
-                  onSelect={setUserModelOverride}
+                  onSelect={handleModelSelect}
                   agentType={agentType}
                 />
               )}

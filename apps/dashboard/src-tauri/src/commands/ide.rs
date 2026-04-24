@@ -515,6 +515,11 @@ pub fn workspace_focus(
     project_cache: tauri::State<'_, ProjectCache>,
     focus_state: tauri::State<'_, FocusManagementState>,
 ) -> Result<(), String> {
+    use std::sync::Mutex;
+    use std::time::Instant;
+
+    static LAST_CALL: Mutex<Option<Instant>> = Mutex::new(None);
+
     // In full-editor mode, external window management is disabled.
     // The frontend adapter already guards this, but we check here as
     // defense in depth.
@@ -522,10 +527,6 @@ pub fn workspace_focus(
         return Ok(());
     }
 
-    use std::sync::Mutex;
-    use std::time::Instant;
-
-    static LAST_CALL: Mutex<Option<Instant>> = Mutex::new(None);
     let mut last = LAST_CALL.lock().unwrap();
     if let Some(t) = *last {
         if t.elapsed() < Duration::from_millis(500) {
@@ -724,7 +725,7 @@ pub fn check_app_exists(app_name: String) -> bool {
     std::process::Command::new("which")
         .arg(&app_name)
         .output()
-        .map_or(false, |output| output.status.success())
+        .is_ok_and(|output| output.status.success())
 }
 
 /// Opens a path with a specific macOS application.

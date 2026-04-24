@@ -544,8 +544,8 @@ pub fn list_windows_for_bundle(bundle_id: &str) -> Vec<WindowInfo> {
     results
 }
 
-/// Get AXTitle for each AX window of a process, keyed by CGWindowID.
-/// Used as a fallback for apps that don't set `kCGWindowName` (e.g. JetBrains IDEs).
+/// Get `AXTitle` for each AX window of a process, keyed by `CGWindowID`.
+/// Used as a fallback for apps that don't set `kCGWindowName` (e.g. `JetBrains` IDEs).
 fn ax_window_titles(pid: i32) -> std::collections::HashMap<u32, String> {
     let mut map = std::collections::HashMap::new();
     unsafe {

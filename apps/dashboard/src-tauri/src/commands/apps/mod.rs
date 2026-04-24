@@ -86,7 +86,7 @@ pub struct AppDef {
     #[serde(default)]
     pub watcher_hint: Option<String>,
     /// How long (ms) to wait for the window to appear after launch.
-    /// Defaults to 5000. Slow-starting apps (e.g. JetBrains IDEs) should use a higher value.
+    /// Defaults to 5000. Slow-starting apps (e.g. `JetBrains` IDEs) should use a higher value.
     #[serde(default)]
     pub wait_timeout: Option<u64>,
 }

@@ -58,6 +58,9 @@ export async function spawnTerminal(
   }
   env.PATH = resolvedPath;
   env.TERM = "xterm-256color";
+  // Hint foreground/background colors so CLI tools (vim, bat, etc.) don't send
+  // OSC 11 queries whose responses leak as visible garbage in the terminal.
+  env.COLORFGBG = "15;0";
   // Remove PORT so workspace dev servers don't inherit the Band server's port
   delete env.PORT;
 

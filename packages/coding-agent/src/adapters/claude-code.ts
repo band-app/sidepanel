@@ -304,7 +304,7 @@ export class ClaudeCodeAdapter implements CodingAgent {
 
   async listSessions(dir: string): Promise<SessionListItem[]> {
     log.info({ dir }, "listSessions");
-    const sessions = await listSessions({ dir, limit: 50 });
+    const sessions = await listSessions({ dir });
     return sessions
       .filter((s) => s.cwd === dir)
       .map((s) => mapSessionInfo(s, readSessionLastPrompt(dir, s.sessionId)));

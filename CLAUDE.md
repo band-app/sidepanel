@@ -20,6 +20,10 @@ Unit tests with heavy mocking verify that your mocks work, not that your system 
 
 See `.claude/skills/integration-tests.md` for the full set of rules and examples.
 
+## Git Hooks & CI
+
+This repo has a pre-push hook (`.husky/pre-push`) that runs linting, formatting, and clippy checks. **Never bypass git hooks** — do not use `--no-verify` on `git push` or `git commit`. If a hook fails, fix the underlying issue instead of skipping the check.
+
 ## Project Tracking
 
 All issues are created in the `band-app/band` GitHub repo.

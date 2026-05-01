@@ -81,7 +81,14 @@ import {
   upsertWorkspaceStatus,
   worktreesDir,
 } from "../lib/state";
-import { abortTask, cancelTask, getTask, submitTask, TaskConflictError } from "../lib/task-runner";
+import {
+  abortTask,
+  cancelTask,
+  getSessionUsage,
+  getTask,
+  submitTask,
+  TaskConflictError,
+} from "../lib/task-runner";
 import { listTasks, loadTask } from "../lib/task-store";
 import { loadWorkspaceTerminalConfig } from "../lib/terminal-config";
 import {
@@ -1509,6 +1516,9 @@ const sessionsRouter = t.router({
     )
     .query(async ({ input }) => {
       const pageSize = input.limit ?? 100;
+      // Latest usage snapshot — included on the initial page only so the
+      // chat UI can re-hydrate the context meter without a separate query.
+      const lastUsage = input.beforeEventId ? null : (getSessionUsage(input.sessionId) ?? null);
 
       // Try in-memory session buffer first
       const events = input.beforeEventId
@@ -1527,7 +1537,13 @@ const sessionsRouter = t.router({
         if (hasMoreInBuffer || input.beforeEventId) {
           // More buffer pages available, or this is already a pagination request —
           // return buffer page only.
-          return { messages: bufferMessages, firstEventId, lastEventId, hasMore: hasMoreInBuffer };
+          return {
+            messages: bufferMessages,
+            firstEventId,
+            lastEventId,
+            hasMore: hasMoreInBuffer,
+            lastUsage,
+          };
         }
 
         // We're at the start of the buffer with no older buffer pages.
@@ -1574,6 +1590,7 @@ const sessionsRouter = t.router({
                   firstEventId: null,
                   lastEventId,
                   hasMore: false,
+                  lastUsage,
                 };
               }
             }
@@ -1582,7 +1599,7 @@ const sessionsRouter = t.router({
           // JSONL lookup failed — return buffer-only results
         }
 
-        return { messages: bufferMessages, firstEventId, lastEventId, hasMore: false };
+        return { messages: bufferMessages, firstEventId, lastEventId, hasMore: false, lastUsage };
       }
 
       // Fallback: no buffer at all — convert agent's JSONL-based history server-side
@@ -1616,7 +1633,7 @@ const sessionsRouter = t.router({
           }[];
         }[],
       );
-      return { messages, firstEventId: null, lastEventId: null, hasMore: false };
+      return { messages, firstEventId: null, lastEventId: null, hasMore: false, lastUsage };
     }),
 });
 

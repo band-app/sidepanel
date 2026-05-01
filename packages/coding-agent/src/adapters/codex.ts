@@ -83,6 +83,8 @@ export class CodexAdapter implements CodingAgent {
     const effectiveModel =
       requestedModel && knownModelIds.has(requestedModel) ? requestedModel : undefined;
     const mode = options?.mode ?? "edit";
+    const effort = options?.effort;
+    const permissionMode = options?.permissionMode;
 
     log.info(
       {
@@ -92,6 +94,8 @@ export class CodexAdapter implements CodingAgent {
         cwd: this.workspaceDir,
         maxTurns: effectiveMaxTurns,
         mode,
+        permissionMode,
+        effort,
       },
       "runSession starting",
     );
@@ -119,24 +123,26 @@ export class CodexAdapter implements CodingAgent {
       env: cleanEnv,
     });
 
-    // Map Band modes to Codex sandbox modes:
-    //   edit → workspace-write  (agent can read + write files, run commands)
-    //   plan → read-only        (agent can only browse, no modifications)
-    const sandboxMode = mode === "plan" ? ("read-only" as const) : ("workspace-write" as const);
+    // Map Band modes/permission to Codex sandbox modes.
+    // permissionMode (when present) wins over mode-derived sandbox.
+    //   plan / read-only intent          → read-only
+    //   edit / acceptEdits / bypass etc. → workspace-write
+    const sandboxMode =
+      permissionMode === "plan" || (!permissionMode && mode === "plan")
+        ? ("read-only" as const)
+        : ("workspace-write" as const);
+
+    const threadOptions = {
+      workingDirectory: this.workspaceDir,
+      sandboxMode,
+      model: effectiveModel,
+      approvalPolicy: "never" as const,
+      ...(effort && { modelReasoningEffort: effort }),
+    };
 
     const thread = sessionId
-      ? codex.resumeThread(sessionId, {
-          workingDirectory: this.workspaceDir,
-          sandboxMode,
-          model: effectiveModel,
-          approvalPolicy: "never",
-        })
-      : codex.startThread({
-          workingDirectory: this.workspaceDir,
-          sandboxMode,
-          model: effectiveModel,
-          approvalPolicy: "never",
-        });
+      ? codex.resumeThread(sessionId, threadOptions)
+      : codex.startThread(threadOptions);
 
     const startMs = Date.now();
     let turnCount = 0;

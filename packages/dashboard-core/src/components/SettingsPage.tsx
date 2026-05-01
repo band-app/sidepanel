@@ -27,6 +27,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAdapter, useCapabilities } from "../context";
 import { useUpdateSettings } from "../hooks/use-settings-mutations";
 import { useSettingsQuery } from "../hooks/use-settings-query";
+import { getBuildInfo } from "../lib/build-info";
 import { playSound, SOUNDS, type SoundId } from "../lib/sounds";
 import type {
   AppMode,
@@ -61,7 +62,8 @@ type Section =
   | "defaults"
   | "notifications"
   | "web-server"
-  | "labels";
+  | "labels"
+  | "about";
 
 const SECTION_TITLES: Record<Exclude<Section, "menu">, string> = {
   "app-mode": "App Mode",
@@ -72,6 +74,7 @@ const SECTION_TITLES: Record<Exclude<Section, "menu">, string> = {
   defaults: "Workspace Settings",
   notifications: "Notifications",
   "web-server": "Web Server",
+  about: "About",
 };
 
 interface Props {
@@ -306,6 +309,7 @@ export function SettingsPage({ onClose, hideTitle }: Props) {
   const notificationsPreview = soundOnNeedsAttention
     ? (SOUNDS.find((s) => s.id === selectedSound)?.label ?? "On")
     : "Off";
+  const aboutPreview = `v${getBuildInfo().version}`;
 
   const activeSection = section === "menu" ? null : section;
 
@@ -716,6 +720,8 @@ export function SettingsPage({ onClose, hideTitle }: Props) {
         </div>
       )}
 
+      {activeSection === "about" && <AboutSection />}
+
       {activeSection === "web-server" && (
         <div className="space-y-4 px-1">
           <div className="space-y-2">
@@ -813,6 +819,13 @@ export function SettingsPage({ onClose, hideTitle }: Props) {
         active={activeSection === "web-server"}
         onClick={() => setSection("web-server")}
       />
+      <Separator />
+      <SettingsRow
+        label="About"
+        value={aboutPreview}
+        active={activeSection === "about"}
+        onClick={() => setSection("about")}
+      />
     </div>
   );
 
@@ -878,6 +891,63 @@ export function SettingsPage({ onClose, hideTitle }: Props) {
             {sectionContent}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function AboutSection() {
+  const info = getBuildInfo();
+  const buildDate = info.date ? new Date(info.date).toLocaleString() : "—";
+  const repoUrl = "https://github.com/band-app/band";
+  const releaseUrl = info.sha && info.sha !== "dev" ? `${repoUrl}/commit/${info.sha}` : repoUrl;
+
+  return (
+    <div className="space-y-4 px-1">
+      <div className="space-y-1">
+        <div className="text-2xl font-semibold">Band</div>
+        <div className="text-sm text-muted-foreground">IDE-agnostic agent orchestrator</div>
+      </div>
+
+      <Separator />
+
+      <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className="text-muted-foreground">Version</dt>
+        <dd className="font-mono">{info.version}</dd>
+
+        <dt className="text-muted-foreground">Channel</dt>
+        <dd className="font-mono">{info.channel}</dd>
+
+        <dt className="text-muted-foreground">Build</dt>
+        <dd className="font-mono">
+          <a href={releaseUrl} target="_blank" rel="noreferrer" className="hover:underline">
+            {info.sha}
+          </a>
+        </dd>
+
+        <dt className="text-muted-foreground">Built</dt>
+        <dd>{buildDate}</dd>
+      </dl>
+
+      <Separator />
+
+      <div className="flex flex-col gap-2 text-sm">
+        <a
+          href={repoUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-blue-500 hover:underline"
+        >
+          GitHub repository
+        </a>
+        <a
+          href={`${repoUrl}/issues/new`}
+          target="_blank"
+          rel="noreferrer"
+          className="text-blue-500 hover:underline"
+        >
+          Report an issue
+        </a>
       </div>
     </div>
   );

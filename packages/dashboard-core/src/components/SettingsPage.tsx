@@ -28,6 +28,7 @@ import { useAdapter, useCapabilities } from "../context";
 import { useUpdateSettings } from "../hooks/use-settings-mutations";
 import { useSettingsQuery } from "../hooks/use-settings-query";
 import { getBuildInfo } from "../lib/build-info";
+import { useExperimentalContextMeter } from "../lib/experimental-flags";
 import { playSound, SOUNDS, type SoundId } from "../lib/sounds";
 import type {
   AppMode,
@@ -63,6 +64,7 @@ type Section =
   | "notifications"
   | "web-server"
   | "labels"
+  | "experimental"
   | "about";
 
 const SECTION_TITLES: Record<Exclude<Section, "menu">, string> = {
@@ -74,6 +76,7 @@ const SECTION_TITLES: Record<Exclude<Section, "menu">, string> = {
   defaults: "Workspace Settings",
   notifications: "Notifications",
   "web-server": "Web Server",
+  experimental: "Experimental",
   about: "About",
 };
 
@@ -140,6 +143,7 @@ export function SettingsPage({ onClose, hideTitle }: Props) {
   const [agentModels, setAgentModels] = useState<
     Record<string, { id: string; name: string; description?: string }[]>
   >({});
+  const [contextMeterEnabled, setContextMeterEnabled] = useExperimentalContextMeter();
 
   const adapter = useAdapter();
 
@@ -720,6 +724,28 @@ export function SettingsPage({ onClose, hideTitle }: Props) {
         </div>
       )}
 
+      {activeSection === "experimental" && (
+        <div className="space-y-4 px-1">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="exp-context-meter">Context window meter</Label>
+              <Switch
+                id="exp-context-meter"
+                checked={contextMeterEnabled}
+                onCheckedChange={setContextMeterEnabled}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Show a per-chat context-usage bar above the prompt input. Token counting accuracy
+              varies by provider and may be off — disable if numbers look wrong.
+            </p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            These features are unstable and may change or break between releases. Stored per device.
+          </p>
+        </div>
+      )}
+
       {activeSection === "about" && <AboutSection />}
 
       {activeSection === "web-server" && (
@@ -818,6 +844,13 @@ export function SettingsPage({ onClose, hideTitle }: Props) {
         value={portPreview}
         active={activeSection === "web-server"}
         onClick={() => setSection("web-server")}
+      />
+      <Separator />
+      <SettingsRow
+        label="Experimental"
+        value={contextMeterEnabled ? "On" : "Off"}
+        active={activeSection === "experimental"}
+        onClick={() => setSection("experimental")}
       />
       <Separator />
       <SettingsRow

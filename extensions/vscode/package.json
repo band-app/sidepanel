@@ -1,5 +1,5 @@
 {
-  "name": "band-sidepanel-vscode",
+  "name": "sidepanel-vscode",
   "displayName": "Sidepanel — Workspace Setup",
   "description": "Companion extension for Sidepanel: auto-creates terminals defined in .band/config.json when a worktree opens in VS Code.",
   "version": "0.1.0",

@@ -1,37 +1,75 @@
-# Band
+# Band Side Panel
 
-IDE-agnostic agent orchestrator — dashboard + VS Code extension.
+A macOS launcher for projects and their git worktrees, with IDE-window
+focus management. Single Tauri app — no monorepo.
 
-## Testing Strategy
+## Repo layout
 
-This project uses **integration tests** as the primary testing approach. Do not write unit tests with mocked dependencies.
+```
+/
+├── src-tauri/                     # Rust crate (Tauri 2, macOS-only)
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   └── src/
+│       ├── main.rs / lib.rs
+│       ├── store.rs               # ~/.band-sidepanel/settings.json
+│       ├── window_pinning.rs      # snap-to-edge geometry
+│       ├── worktrees.rs           # git worktree list --porcelain
+│       └── commands/              # Tauri command handlers
+├── src/                           # React frontend
+│   ├── App.tsx / main.tsx / styles.css
+│   ├── api/tauri.ts               # typed invoke() wrapper
+│   └── components/                # ProjectList, WorktreeList, Settings, ...
+├── index.html
+├── package.json / vite.config.ts / tsconfig.json
+└── .github/workflows/             # mac-only build + release
+```
 
-### Why Integration Tests
+## Testing strategy
 
-Unit tests with heavy mocking verify that your mocks work, not that your system works. Integration tests exercise the real system through its public interfaces — the same way a client or user would interact with it.
+The repo uses **integration tests over the real Tauri binary / real
+filesystem**. No unit tests with mocked dependencies.
 
 ### Rules
 
-- **Never modify production code to make a test pass.** No test-only branches, no exporting internals, no `NODE_ENV` checks in business logic.
-- **Black-box testing only.** Test through public interfaces: HTTP endpoints, CLI commands, file system outputs.
-- **Real infrastructure.** For databases use test containers, not mocks. For file-based state use temporary directories. Start real servers on random ports.
-- **MSW for external boundaries.** Mock only what you don't own (third-party APIs) using MSW at the network layer.
-- **Node.js built-in test runner.** Use `node:test` with `node:assert/strict`. Don't add test framework dependencies unless already present.
+- **Never modify production code to make a test pass.** No test-only
+  branches, no exporting internals, no `NODE_ENV` checks in business logic.
+- **Black-box.** Test through public interfaces: Tauri invoke commands,
+  CLI binaries, file system outputs.
+- **Real infrastructure.** Use temp dirs for the JSON store, real `git`
+  for worktree discovery, real macOS APIs for window detection.
+- **Rust built-in test runner.** Use `cargo test`. The existing
+  `worktrees::tests::parses_basic_porcelain` is a model.
 
-See `.claude/skills/integration-tests.md` for the full set of rules and examples.
+## Git Hooks
 
-## Git Hooks & CI
+`.husky/pre-push` runs `biome check`, `cargo fmt --check`,
+`cargo clippy -D warnings`, and `cargo test` against `src-tauri/`.
+**Never bypass git hooks** — no `--no-verify`. If a hook fails, fix the
+underlying issue.
 
-This repo has a pre-push hook (`.husky/pre-push`) that runs linting, formatting, and clippy checks. **Never bypass git hooks** — do not use `--no-verify` on `git push` or `git commit`. If a hook fails, fix the underlying issue instead of skipping the check.
+## Settings
 
-## Project Tracking
+`~/.band-sidepanel/settings.json` is the source of truth for the user's
+project list and window preferences. Worktrees are discovered live via
+`git worktree list --porcelain`, never persisted.
 
-All issues are created in the `band-app/band` GitHub repo.
+```json
+{
+  "projects": [
+    { "id": "myproj-…", "name": "myproj", "path": "/Users/me/code/myproj" }
+  ],
+  "window": {
+    "edge": "right",
+    "width": 320,
+    "focusPolling": true
+  }
+}
+```
 
-## Architecture: Web Server vs Tauri App
+## Architectural constraint: macOS-only, no web server
 
-The web server (`apps/web`) handles **data, state, and background processes** only. It must never do window management — no spawning `code`, no AppleScript, no opening/focusing/positioning IDE windows. Window management (VS Code focus, window positioning, folder pickers, Finder reveal) is the Tauri desktop app's responsibility (`apps/dashboard`).
-
-## Band CLI Skill
-
-The Band CLI skill is generated from the template at `apps/cli/skills/band-cli.md` and the CLI schema. Run `band generate-skills --output-dir apps/cli/skills` to regenerate, then copy the output to `~/.claude/skills/band/SKILL.md`.
+The side panel is a desktop launcher. It **does not** run a Node.js
+server, host an HTTP API, or open any sockets. Window management
+(focus polling, snap-to-edge, IDE-window raising) is the Tauri app's
+responsibility — there is no other process.

@@ -81,7 +81,7 @@ Use **temporary directories** per test or test suite. Point the system at the te
 
 ```js
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-'));
-// Set env/config to use tmpDir instead of ~/.band/
+// Set env/config to use tmpDir instead of the real config dir
 // ...run tests...
 // Cleanup in afterEach/after
 fs.rmSync(tmpDir, { recursive: true, force: true });

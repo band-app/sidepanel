@@ -1,216 +1,83 @@
-# Band
+# Band Side Panel
 
-IDE-agnostic agent orchestrator — dashboard + VS Code extension. A desktop app for managing AI coding agents across multiple workspaces and projects, with a built-in code editor, terminal, chat, LSP support, and a CLI for programmatic control.
+A macOS launcher for projects and their git worktrees, with IDE-window
+focus management.
 
-```
-┌──────────────────────────────────────────┐
-│  Dashboard (Tauri v2 + React 19)         │
-│  - Project & workspace management        │
-│  - Code editor (CodeMirror 6 + LSP)      │
-│  - Integrated terminal & chat            │
-│  - Agent status overview                 │
-│  - Window management (focus, positioning)│
-└──────────────┬───────────────────────────┘
-               │
-       Web Server (Node.js)
-   (data, state, git, LSP, agents)
-        http://localhost:3456
-               │
-       ┌───────┴───────┐
-       ▼               ▼
-  ┌─────────┐    ┌─────────┐
-  │ VS Code │    │  Band   │
-  │  Ext.   │    │   CLI   │
-  └────┬────┘    └─────────┘
-       ▼
-   AI Agent (claude, cursor, etc.)
-```
+The side panel pins to the left or right edge of your screen at full
+height. Click a project to expand its worktrees; click a worktree to
+focus the IDE windows configured for it. The currently-focused worktree
+is highlighted automatically — the panel watches the frontmost macOS
+window in the background.
 
-## Project Structure
+## Requirements
 
-```
-apps/
-  dashboard/          Tauri v2 desktop app (Rust backend + React frontend)
-  web/                Node.js web server (tRPC, git ops, LSP, coding agents)
-  cli/                Band CLI (Rust) — programmatic workspace management
-  website/            Marketing website (Astro)
-extensions/
-  vscode/             VS Code extension
-packages/
-  dashboard-core/     Shared dashboard UI (CodeMirror, components)
-  coding-agent/       Coding agent integration
-  logger/             Shared logging (pino)
-  ui/                 Shared UI components
-```
+- macOS 13+ (Apple Silicon or Intel)
+- Node.js 22+ + pnpm 10+
+- Rust toolchain (rustfmt, clippy)
 
-## Prerequisites
+## Develop
 
-- [Node.js](https://nodejs.org) v22+
-- [pnpm](https://pnpm.io) v10+
-- [Rust](https://rustup.rs) (for Tauri dashboard and CLI)
-- macOS (dashboard uses native window management)
-
-### Install Rust (if not already installed)
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-## Setup
-
-```bash
-# Clone and install dependencies
-git clone <repo-url>
-cd band
+```sh
 pnpm install
+pnpm tauri:dev          # spawns vite + tauri
 ```
 
-## Running the Dashboard
+## Build
 
-### Development
-
-```bash
-# From the repo root:
-pnpm dev:dashboard
-
-# Or from the dashboard directory:
-cd apps/dashboard
-pnpm tauri dev
+```sh
+pnpm tauri:build        # produces a .app + .dmg under src-tauri/target/release/bundle/
 ```
 
-This builds the CLI and web server, then starts the Tauri app. Hot-reloading is enabled for the React frontend and Rust backend.
+## Layout
 
-### Production Build
-
-```bash
-pnpm build:dashboard
+```
+/
+├── src-tauri/                     # Rust crate (Tauri 2, macOS-only)
+│   ├── Cargo.toml
+│   ├── tauri.conf.json
+│   └── src/
+│       ├── main.rs / lib.rs
+│       ├── store.rs               # JSON-backed ~/.band-sidepanel/settings.json
+│       ├── window_pinning.rs      # snap-to-edge geometry
+│       ├── worktrees.rs           # git worktree list --porcelain
+│       └── commands/              # Tauri command handlers
+│           ├── window_focus.rs    # workspace detection + polling
+│           ├── window_dialogs.rs  # pick_folder, reveal_in_finder, ...
+│           ├── ax_windows.rs      # macOS Accessibility FFI
+│           ├── window_manager.rs  # IDE-window registry
+│           ├── apps/mod.rs        # IDE preset registry + layout engine
+│           ├── projects.rs        # list/add/remove project
+│           ├── worktrees.rs       # list_worktrees command
+│           └── settings.rs        # get/update_settings
+├── src/                           # React frontend
+│   ├── App.tsx / main.tsx / styles.css
+│   ├── api/tauri.ts               # typed invoke() wrapper
+│   └── components/                # ProjectList, WorktreeList, AddProjectButton, Settings
+├── index.html
+├── package.json / vite.config.ts / tsconfig.json
+└── .github/workflows/             # mac-only build + release
 ```
 
-This produces a `.dmg` installer at `apps/dashboard/src-tauri/target/release/bundle/dmg/`.
+## Settings
 
-## Web Server
+`~/.band-sidepanel/settings.json` is the source of truth:
 
-The web server (`apps/web`) is the backend for the dashboard. It handles:
-
-- **Git operations** — diff, commit, branch management via tRPC
-- **LSP** — spawns and proxies language servers (TypeScript, etc.) over WebSocket
-- **Coding agents** — manages agent sessions and task execution
-- **File serving** — serves the dashboard frontend
-
-```bash
-# Development:
-pnpm dev:web
-
-# Build:
-pnpm build:web
+```json
+{
+  "projects": [
+    { "id": "myproj-…", "name": "myproj", "path": "/Users/me/code/myproj" }
+  ],
+  "window": {
+    "edge": "right",
+    "width": 320,
+    "focusPolling": true
+  }
+}
 ```
 
-The server runs on `http://localhost:3456` by default (configurable via `PORT` env var). It is started automatically by the Tauri dashboard in production.
+Worktrees are **not** persisted — they're discovered live by running
+`git worktree list --porcelain` against each project's path.
 
-## Band CLI
+## License
 
-The CLI is a thin client for the web server, used for programmatic workspace management:
-
-```bash
-band projects list              # List registered projects
-band workspaces list            # List workspaces
-band workspaces create          # Create a new workspace (git worktree)
-band tasks list                 # List coding agent tasks
-band tunnels start              # Start a tunnel
-band settings                   # View settings
-```
-
-All state and operations happen server-side. The CLI connects to the running Band server.
-
-## VS Code Extension
-
-### Build
-
-```bash
-pnpm build:extension
-
-# Or from the extension directory:
-cd extensions/vscode
-pnpm build
-```
-
-### Install in VS Code
-
-1. Build the extension
-2. Open VS Code
-3. Run `Extensions: Install from VSIX...` from the command palette (if packaged) **or** for development:
-
-```bash
-cd extensions/vscode
-code --extensionDevelopmentPath="$(pwd)"
-```
-
-### How the Extension Works
-
-The extension activates when it detects a `.band/config.yaml` in the workspace. It then:
-
-1. Sets up the editor layout (splits) based on config
-2. Creates terminals and runs configured commands (dev server, AI agent)
-3. Opens Simple Browser for preview URLs
-4. Monitors terminal output for agent status changes
-5. Writes status to `~/.band/status/{workspaceId}.json`
-
-## Development
-
-### Lint & Format
-
-```bash
-# Check
-pnpm check
-
-# Fix
-pnpm lint:fix
-pnpm format:fix
-```
-
-### Testing
-
-```bash
-pnpm test
-```
-
-This project uses integration tests as the primary testing approach — see `CLAUDE.md` for the testing strategy.
-
-### Dashboard (Tauri + React)
-
-```bash
-cd apps/dashboard
-
-# Full Tauri dev (frontend + Rust backend + native window):
-pnpm tauri dev
-
-# Check Rust compilation:
-cd src-tauri && cargo check
-```
-
-### VS Code Extension
-
-```bash
-cd extensions/vscode
-
-# Build once:
-pnpm build
-
-# Watch mode (rebuilds on file change):
-pnpm watch
-
-# Test in VS Code:
-code --extensionDevelopmentPath="$(pwd)"
-```
-
-### Adding a New IDE Extension
-
-To add support for another IDE (IntelliJ, Xcode, etc.):
-
-1. Create a new directory under `extensions/`
-2. On workspace open, read `.band/config.yaml`
-3. Monitor agent terminal output using the patterns from config
-4. Write status JSON to `~/.band/status/{workspaceId}.json`
-5. Clean up the status file when the workspace closes
-
-The dashboard will automatically pick up status from any IDE that writes to `~/.band/status/`.
+MIT — see [LICENSE](./LICENSE).

@@ -13,10 +13,6 @@
     }
   },
   "css": {
-    "parser": {
-      "cssModules": true,
-      "tailwindDirectives": true
-    },
     "linter": {
       "enabled": true
     }
@@ -62,13 +58,7 @@
       "!**/dist",
       "!**/build",
       "!**/target",
-      "!**/.next",
-      "!**/.vinxi",
-      "!**/.output",
-      "!**/*.gen.ts",
-      "!**/apps/dashboard/src-tauri/gen",
-      "!**/apps/sidepanel/src-tauri/gen",
-      "!**/.astro"
+      "!**/src-tauri/gen"
     ]
   }
 }

@@ -10,6 +10,13 @@
   <key>CFBundleDisplayName</key>
   <string>Sidepanel</string>
 
+  <!-- Force the bundle identifier into the embedded Info.plist that Tauri
+       bakes into the dev binary. macOS keys TCC (Accessibility/Automation)
+       entries by this; without it, dev binaries fall back to path-based
+       heuristics that can match a different app's cached entry. -->
+  <key>CFBundleIdentifier</key>
+  <string>com.band-app.sidepanel</string>
+
   <key>NSAccessibilityUsageDescription</key>
   <string>Sidepanel uses macOS Accessibility to detect the frontmost window and to bring the IDE windows for the selected workspace to the front. Without this permission the panel can launch IDE windows but cannot focus or position them.</string>
 

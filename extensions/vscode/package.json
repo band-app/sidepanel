@@ -1,0 +1,26 @@
+{
+  "name": "band-sidepanel-vscode",
+  "displayName": "Band Side Panel — Workspace Setup",
+  "description": "Companion extension for Band Side Panel: auto-creates terminals defined in .band/config.json when a worktree opens in VS Code.",
+  "version": "0.1.0",
+  "publisher": "band-app",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/.band/config.json",
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "band.setupWorkspace",
+        "title": "Band: Setup Workspace"
+      }
+    ]
+  }
+}

@@ -53,6 +53,10 @@ pnpm tauri:build        # produces a .app + .dmg under src-tauri/target/release/
 │   ├── App.tsx / main.tsx / styles.css
 │   ├── api/tauri.ts               # typed invoke() wrapper
 │   └── components/                # ProjectList, WorktreeList, AddProjectButton, Settings
+├── extensions/vscode/             # VS Code / Cursor companion extension
+│   ├── package.json               # manifest only — deps live at the root
+│   ├── tsconfig.json
+│   └── src/                       # config.ts, extension.ts, workspace-setup.ts
 ├── index.html
 ├── package.json / vite.config.ts / tsconfig.json
 └── .github/workflows/             # mac-only build + release
@@ -77,6 +81,18 @@ pnpm tauri:build        # produces a .app + .dmg under src-tauri/target/release/
 
 Worktrees are **not** persisted — they're discovered live by running
 `git worktree list --porcelain` against each project's path.
+
+## VS Code companion extension
+
+`extensions/vscode/` is a companion extension that auto-creates terminals
+defined in `.band/config.json` when a worktree opens in VS Code or Cursor.
+It's bundled into the .app via `src-tauri/tauri.conf.json#bundle.resources`,
+so it ships with the side panel and doesn't need a separate install.
+
+```sh
+pnpm build:extension     # esbuild → extensions/vscode/dist/extension.js
+pnpm tauri:build         # runs build:extension first, then tauri build
+```
 
 ## License
 

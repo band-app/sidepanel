@@ -9,7 +9,7 @@ focus management. Single Tauri app — no monorepo.
 /
 ├── src-tauri/                     # Rust crate (Tauri 2, macOS-only)
 │   ├── Cargo.toml
-│   ├── tauri.conf.json
+│   ├── tauri.conf.json            # bundle.resources picks up the extension
 │   └── src/
 │       ├── main.rs / lib.rs
 │       ├── store.rs               # ~/.band-sidepanel/settings.json
@@ -20,10 +20,35 @@ focus management. Single Tauri app — no monorepo.
 │   ├── App.tsx / main.tsx / styles.css
 │   ├── api/tauri.ts               # typed invoke() wrapper
 │   └── components/                # ProjectList, WorktreeList, Settings, ...
+├── extensions/vscode/             # VS Code companion extension
+│   ├── package.json               # manifest only — deps live at root
+│   ├── tsconfig.json
+│   └── src/                       # config.ts, extension.ts, workspace-setup.ts
 ├── index.html
 ├── package.json / vite.config.ts / tsconfig.json
 └── .github/workflows/             # mac-only build + release
 ```
+
+## VS Code extension
+
+`extensions/vscode/` is a companion extension that auto-creates terminals
+from `.band/config.json` when a worktree opens in VS Code or Cursor. Build
+deps (esbuild, @types/vscode, etc.) are declared at the **repo root** —
+the extension's own `package.json` is a manifest only (no scripts, no
+devDependencies). This keeps a single `node_modules` for the whole repo.
+
+Build pipeline:
+
+- `pnpm build:extension` — esbuild bundles `extensions/vscode/src/extension.ts`
+  into `extensions/vscode/dist/extension.js`.
+- `pnpm tauri:build` runs `build:extension` first, then `tauri build`.
+- `src-tauri/tauri.conf.json#bundle.resources` ships
+  `extensions/vscode/dist/extension.js` + `extensions/vscode/package.json`
+  inside the .app bundle at `Contents/Resources/extensions/band/`.
+
+The extension reads `~/.band-sidepanel/settings.json` for the project list
+and the optional top-level `defaults` key (per-project app/terminal
+defaults). It does **not** touch `~/.band/` (the old web-server config).
 
 ## Testing strategy
 

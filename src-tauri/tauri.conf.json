@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeBuildCommand": "pnpm build && pnpm build:extension"
   },
   "app": {
     "windows": [
@@ -42,7 +42,11 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "../extensions/vscode/dist/extension.js": "extensions/band/dist/extension.js",
+      "../extensions/vscode/package.json": "extensions/band/package.json"
+    }
   },
   "plugins": {}
 }

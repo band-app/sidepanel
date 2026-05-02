@@ -5,6 +5,7 @@ mod commands;
 mod git;
 mod state;
 mod store;
+mod window_pinning;
 mod worktrees;
 
 use std::fs::OpenOptions;
@@ -150,21 +151,15 @@ pub fn run() {
                 }
             }
 
-            // Default size: settings.window.width × full screen height. Edge
-            // pinning lands in PR 3 — for now we just stretch to screen height.
-            if let Ok(Some(monitor)) = window.current_monitor() {
-                let screen_size = monitor.size();
-                let scale_factor = monitor.scale_factor();
-                let screen_height = f64::from(screen_size.height) / scale_factor;
-                let saved_width = store::load().window.width.max(240.0);
-
-                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(
-                    0.0, 0.0,
-                )));
-                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
-                    saved_width,
-                    screen_height,
-                )));
+            // Pin the window to the configured screen edge at full screen height.
+            let initial = store::load().window;
+            let applied_width = window_pinning::pin(&window, &initial.edge, initial.width);
+            // If the saved width was below the floor, persist the clamped value
+            // so the next startup matches what's actually on screen.
+            if (applied_width - initial.width).abs() > f64::EPSILON {
+                let _ = store::update(|s| {
+                    s.window.width = applied_width;
+                });
             }
 
             // Start focus polling if enabled. The thread exits when the flag flips.
@@ -176,14 +171,20 @@ pub fn run() {
                 }
             }
 
-            // Raise this workspace's app windows whenever the panel itself gains focus.
+            // Per-window event handler:
+            // 1. On focus, raise the active workspace's app windows (so the
+            //    panel and IDE windows come to front together).
+            // 2. On resize, debounce-persist the new width back to settings.
             {
                 let focus_flag = app.state::<FocusManagementState>().inner().0.clone();
                 let active_ws_state = app.state::<ActiveWorkspaceState>().inner().0.clone();
                 let raise_cache = app.state::<ProjectCache>().inner().clone();
                 let window_ref = app.get_webview_window("main").unwrap();
-                window_ref.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Focused(true) = event {
+                let resize_window = window_ref.clone();
+                let last_persisted_width =
+                    std::sync::Arc::new(std::sync::Mutex::new(initial.width));
+                window_ref.on_window_event(move |event| match event {
+                    tauri::WindowEvent::Focused(true) => {
                         if !focus_flag.load(std::sync::atomic::Ordering::SeqCst) {
                             return;
                         }
@@ -193,6 +194,27 @@ pub fn run() {
                             commands::window_focus::raise_workspace_windows(&ws_id, &raise_cache);
                         }
                     }
+                    tauri::WindowEvent::Resized(_) => {
+                        // Tauri fires Resized on every pixel of a drag. Use
+                        // a saved threshold so we only hit disk when the
+                        // width actually moved by ≥ 4 logical px.
+                        if let Ok(size) = resize_window.outer_size() {
+                            let scale = resize_window
+                                .current_monitor()
+                                .ok()
+                                .flatten()
+                                .map_or(1.0, |m| m.scale_factor());
+                            let new_width = f64::from(size.width) / scale;
+                            let mut last = last_persisted_width.lock().unwrap();
+                            if (new_width - *last).abs() >= 4.0 {
+                                *last = new_width;
+                                let _ = store::update(|s| {
+                                    s.window.width = new_width;
+                                });
+                            }
+                        }
+                    }
+                    _ => {}
                 });
             }
 

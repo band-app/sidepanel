@@ -17,3 +17,4 @@ playwright-report/
 .last-run.json
 apps/dashboard/src-tauri/binaries/*
 !apps/dashboard/src-tauri/binaries/.gitkeep
+apps/sidepanel/src-tauri/gen/

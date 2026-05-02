@@ -67,6 +67,7 @@
       "!**/.output",
       "!**/*.gen.ts",
       "!**/apps/dashboard/src-tauri/gen",
+      "!**/apps/sidepanel/src-tauri/gen",
       "!**/.astro"
     ]
   }

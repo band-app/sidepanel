@@ -44,7 +44,8 @@
     },
     "packages/ui": {
       "entry": ["src/index.ts", "src/utils.ts"],
-      "project": ["src/**/*.{ts,tsx}"]
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["tailwindcss", "tw-animate-css"]
     },
     "packages/dashboard-core": {
       "entry": ["src/index.ts", "src/adapters/web.ts", "src/adapters/hybrid.ts"],

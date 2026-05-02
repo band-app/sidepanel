@@ -1,72 +1,107 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
-import { api, type PublicSettings } from "./api/tauri";
-
-// PR 1 placeholder: just verifies that the webview boots, IPC works, and the
-// `active-workspace` event from the focus-polling thread is received.
-// PR 2 replaces this with the real ProjectList / WorktreeList / Settings UI.
+import { useCallback, useEffect, useState } from "react";
+import { api, type Project, type PublicSettings, type WindowSettings } from "./api/tauri";
+import { AddProjectButton } from "./components/AddProjectButton";
+import { ProjectList } from "./components/ProjectList";
+import { Settings } from "./components/Settings";
 
 export function App() {
+  const [projects, setProjects] = useState<Project[] | null>(null);
   const [settings, setSettings] = useState<PublicSettings | null>(null);
-  const [projectCount, setProjectCount] = useState<number | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const loadProjects = useCallback(() => {
+    api
+      .listProjects()
+      .then(setProjects)
+      .catch((e) => setError(`list_projects: ${String(e)}`));
+  }, []);
+
+  // Initial load + active-workspace event subscription.
   useEffect(() => {
+    loadProjects();
+
     api
       .getSettings()
       .then(setSettings)
-      .catch((e) => setError(`getSettings: ${String(e)}`));
-    api
-      .listProjects()
-      .then((projects) => setProjectCount(projects.length))
-      .catch((e) => setError(`listProjects: ${String(e)}`));
+      .catch((e) => setError(`get_settings: ${String(e)}`));
+
     api
       .getActiveWorkspace()
       .then(setActiveWorkspace)
       .catch(() => undefined);
 
-    const unlisten = listen<string>("active-workspace", (event) => {
+    const unlistenPromise = listen<string>("active-workspace", (event) => {
       setActiveWorkspace(event.payload);
     });
     return () => {
-      unlisten.then((fn) => fn());
+      unlistenPromise.then((fn) => fn());
     };
+  }, [loadProjects]);
+
+  const onSettingsChanged = useCallback((window: WindowSettings) => {
+    setSettings({ window });
   }, []);
 
   return (
     <main className="panel">
       <header className="header">
-        <h1>Band Side Panel</h1>
-        <p className="subtitle">PR 1 placeholder — IPC smoke test</p>
+        <h1>Band</h1>
+        <button
+          type="button"
+          className="icon-button"
+          onClick={() => setShowSettings((v) => !v)}
+          aria-label="Toggle settings"
+          aria-pressed={showSettings}
+          title="Settings"
+        >
+          ⚙
+        </button>
       </header>
 
-      <section className="card">
-        <h2>Settings</h2>
-        {settings ? (
-          <pre>{JSON.stringify(settings, null, 2)}</pre>
+      {showSettings && settings ? (
+        <Settings
+          initial={settings.window}
+          onSettingsChanged={onSettingsChanged}
+          onError={setError}
+          onClose={() => setShowSettings(false)}
+        />
+      ) : null}
+
+      <section className="projects-section">
+        {projects === null ? (
+          <p className="muted">loading projects…</p>
         ) : (
-          <p className="muted">loading…</p>
+          <ProjectList
+            projects={projects}
+            activeWorkspace={activeWorkspace}
+            onProjectsChanged={loadProjects}
+            onError={setError}
+          />
         )}
       </section>
 
-      <section className="card">
-        <h2>Projects</h2>
-        <p>
-          {projectCount === null
-            ? "loading…"
-            : `${projectCount} project${projectCount === 1 ? "" : "s"} configured`}
-        </p>
-      </section>
+      <footer className="footer">
+        <AddProjectButton onAdded={loadProjects} onError={setError} />
+      </footer>
 
-      <section className="card">
-        <h2>Active workspace</h2>
-        <p>
-          <code>{activeWorkspace ?? "—"}</code>
-        </p>
-      </section>
-
-      {error ? <pre className="error">{error}</pre> : null}
+      {error ? (
+        <div
+          className="error"
+          role="alert"
+          onClick={() => setError(null)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              setError(null);
+            }
+          }}
+        >
+          <pre>{error}</pre>
+          <small className="muted">click to dismiss</small>
+        </div>
+      ) : null}
     </main>
   );
 }

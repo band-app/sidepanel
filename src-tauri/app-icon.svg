@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Dark rounded-square background, matching the panel UI. -->
+  <rect width="1024" height="1024" rx="225" ry="225" fill="#0a0a0a"/>
+
+  <!-- Lucide "panel-left" glyph, scaled and centered.
+       Original 24x24 viewBox: rect(3,3,18,18) rx=2; vertical line at x=9 from y=3 to y=21.
+       Scaled to ~544px centered with ~240px margin and a stroke that reads cleanly at small icon sizes. -->
+  <g fill="none" stroke="#ffffff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="240" y="240" width="544" height="544" rx="55"/>
+    <line x1="421" y1="240" x2="421" y2="784"/>
+  </g>
+</svg>

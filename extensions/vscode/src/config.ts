@@ -58,7 +58,7 @@ export async function loadUserDefaults(): Promise<BandConfig | null> {
     }
     return null;
   } catch (err) {
-    console.log("[Band] Failed to load user defaults:", err);
+    console.log("[Sidepanel] Failed to load user defaults:", err);
     return null;
   }
 }

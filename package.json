@@ -2,7 +2,7 @@
   "name": "band-sidepanel",
   "version": "0.1.0",
   "private": true,
-  "description": "Band Side Panel — macOS launcher for projects and git worktrees",
+  "description": "Sidepanel — macOS launcher for projects and git worktrees",
   "type": "module",
   "scripts": {
     "dev": "vite",

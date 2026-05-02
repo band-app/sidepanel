@@ -48,7 +48,7 @@ export function App() {
   return (
     <main className="panel">
       <header className="header">
-        <h1>Band</h1>
+        <h1>Sidepanel</h1>
         <button
           type="button"
           className="icon-button"

@@ -1,4 +1,4 @@
-# Contributing to Band Side Panel
+# Contributing to Sidepanel
 
 Thanks for your interest in contributing!
 

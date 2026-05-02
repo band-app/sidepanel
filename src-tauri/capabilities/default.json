@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Default permissions for Band Side Panel",
+  "description": "Default permissions for Sidepanel",
   "windows": ["main"],
   "permissions": [
     "core:default",

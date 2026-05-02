@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Band Side Panel",
+  "productName": "Sidepanel",
   "version": "0.1.0",
   "identifier": "com.band-app.sidepanel",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Band Side Panel",
+        "title": "Sidepanel",
         "width": 320,
         "minWidth": 240,
         "height": 900,

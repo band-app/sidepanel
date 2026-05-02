@@ -1,4 +1,4 @@
-# Band Side Panel
+# Sidepanel
 
 A macOS launcher for projects and their git worktrees, with IDE-window
 focus management.

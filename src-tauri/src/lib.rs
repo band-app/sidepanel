@@ -1,5 +1,5 @@
 #[cfg(not(target_os = "macos"))]
-compile_error!("Band Side Panel only supports macOS");
+compile_error!("Sidepanel only supports macOS");
 
 mod commands;
 mod git;
@@ -103,7 +103,7 @@ pub fn run() {
                 .item(&reload_item)
                 .build()?;
 
-            let app_menu = SubmenuBuilder::new(app, "Band Side Panel")
+            let app_menu = SubmenuBuilder::new(app, "Sidepanel")
                 .item(&PredefinedMenuItem::about(app, None, None)?)
                 .separator()
                 .item(&PredefinedMenuItem::hide(app, None)?)

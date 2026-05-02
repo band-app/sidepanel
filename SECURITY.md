@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Band Side Panel, please
+If you discover a security vulnerability in Sidepanel, please
 report it responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
@@ -22,5 +22,5 @@ Only the latest release is supported with security updates.
 
 ## Scope
 
-This policy covers the Band Side Panel macOS desktop application
+This policy covers the Sidepanel macOS desktop application
 (`src-tauri/`) and its React frontend (`src/`).

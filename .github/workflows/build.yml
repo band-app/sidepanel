@@ -92,10 +92,15 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      - name: Build VS Code extension (bundled into the .app)
+        run: pnpm build:extension
+
       - name: Build Tauri app
         id: bundle
+        # Pass an empty beforeBuildCommand so tauri doesn't re-run the
+        # frontend + extension builds we already did above.
         run: |
-          pnpm tauri build --ci
+          pnpm tauri build --ci --config '{"build":{"beforeBuildCommand":""}}'
           DMG=$(find src-tauri/target/release/bundle/dmg -name '*.dmg' | head -1)
           echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
           echo "Built: $DMG"

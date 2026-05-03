@@ -248,6 +248,50 @@ pub fn all_known_bundle_ids() -> Vec<(&'static str, &'static str)> {
         .collect()
 }
 
+// --- Installation detection ---
+
+/// Check whether the macOS application matching `def` is installed in any of
+/// the standard `.app` locations.
+pub fn is_installed(def: &AppDef) -> bool {
+    let mut candidates = vec![
+        format!("/Applications/{}.app", def.display_name),
+        format!("/System/Applications/{}.app", def.display_name),
+    ];
+    if let Ok(home) = std::env::var("HOME") {
+        candidates.push(format!("{home}/Applications/{}.app", def.display_name));
+    }
+    candidates.iter().any(|p| std::path::Path::new(p).exists())
+}
+
+/// Editors are tried in this order when picking the default workspace app.
+/// Earlier entries win; once one is installed, we stop.
+pub const EDITOR_PRIORITY: &[&str] = &[
+    "vscode",
+    "cursor",
+    "windsurf",
+    "kiro",
+    "zed",
+    "intellij",
+    "webstorm",
+    "pycharm",
+    "goland",
+    "rustrover",
+    "rider",
+    "clion",
+    "phpstorm",
+    "android-studio",
+    "xcode",
+];
+
+/// Pick the highest-priority editor that's actually installed, or `None` if
+/// the user has none of the editors we know about.
+pub fn detect_default_editor() -> Option<&'static AppDef> {
+    EDITOR_PRIORITY
+        .iter()
+        .filter_map(|t| registry().get(t))
+        .find(|def| is_installed(def))
+}
+
 // --- Config types ---
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

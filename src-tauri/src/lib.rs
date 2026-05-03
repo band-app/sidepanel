@@ -54,6 +54,12 @@ pub fn run() {
 
     log_to_file("sidepanel starting");
 
+    // First-run: detect an installed editor (VS Code, Cursor, Zed, …) and seed
+    // `~/.band-sidepanel/settings.json#defaults.apps` so the first
+    // `workspace_focus` call doesn't fail with "No apps configured".
+    // Idempotent — skipped if `defaults` is already set.
+    commands::defaults::ensure_first_run_defaults();
+
     // Persisted focus-polling preference; defaults to enabled.
     let initial_focus_polling = store::load().window.focus_polling;
 

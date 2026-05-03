@@ -3,6 +3,7 @@
 
 pub mod apps;
 pub mod ax_windows;
+pub mod defaults;
 pub mod projects;
 pub mod settings;
 pub mod window_dialogs;

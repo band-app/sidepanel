@@ -69,7 +69,7 @@ async function runSetup() {
   }
 
   vscode.window.showErrorMessage(
-    `No .sidepanel/config.json found. Checked: ${workspacePath}/.sidepanel/config.json${projectPath ? ` and ${projectPath}/.sidepanel/config.json` : ""}`,
+    `No .band-sidepanel/config.json found. Checked: ${workspacePath}/.band-sidepanel/config.json${projectPath ? ` and ${projectPath}/.band-sidepanel/config.json` : ""}`,
   );
 }
 

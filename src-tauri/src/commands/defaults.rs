@@ -1,7 +1,7 @@
 //! First-run defaults — pick an installed IDE and seed
 //! `~/.band-sidepanel/settings.json` with a minimal `defaults.apps` block so
 //! the very first `workspace_focus` succeeds without the user having to write
-//! a `.sidepanel/config.json` by hand.
+//! a `.band-sidepanel/config.json` by hand.
 //!
 //! The seeding is idempotent: if the user has already set `defaults` (even to
 //! an empty value), we leave it alone. Detection runs every startup but is

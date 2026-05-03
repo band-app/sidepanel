@@ -1,7 +1,7 @@
 {
   "name": "sidepanel-vscode",
   "displayName": "Sidepanel — Workspace Setup",
-  "description": "Companion extension for Sidepanel: auto-creates terminals defined in .sidepanel/config.json when a worktree opens in VS Code.",
+  "description": "Companion extension for Sidepanel: auto-creates terminals defined in .band-sidepanel/config.json when a worktree opens in VS Code.",
   "version": "0.1.0",
   "publisher": "band-app",
   "engines": {
@@ -11,7 +11,7 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:**/.sidepanel/config.json",
+    "workspaceContains:**/.band-sidepanel/config.json",
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",

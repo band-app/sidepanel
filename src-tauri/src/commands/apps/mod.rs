@@ -417,11 +417,11 @@ pub fn compute_layout(
 // --- Config loading ---
 
 pub fn load_apps_config(worktree_path: &str, project_path: &str) -> Vec<AppConfig> {
-    // Try .sidepanel/config.json — worktree first, then project root (fallback
-    // for .gitignored configs that don't appear in new worktrees).
+    // Try .band-sidepanel/config.json — worktree first, then project root
+    // (fallback for .gitignored configs that don't appear in new worktrees).
     for base in [worktree_path, project_path] {
         let config_path = std::path::PathBuf::from(base)
-            .join(".sidepanel")
+            .join(".band-sidepanel")
             .join("config.json");
 
         if let Ok(data) = std::fs::read_to_string(&config_path) {

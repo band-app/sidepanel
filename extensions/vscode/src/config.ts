@@ -23,7 +23,7 @@ export interface BandConfig {
 }
 
 export function getConfigPath(workspacePath: string): string {
-  return path.join(workspacePath, ".sidepanel", "config.json");
+  return path.join(workspacePath, ".band-sidepanel", "config.json");
 }
 
 export async function loadConfig(workspacePath: string): Promise<BandConfig | null> {
@@ -43,7 +43,7 @@ export async function loadConfig(workspacePath: string): Promise<BandConfig | nu
  *
  * The side panel's settings file contains a flattened `extra` blob alongside
  * the structured `projects` / `window` keys; per-project defaults live under
- * the top-level `defaults` key (same shape as a `.sidepanel/config.json`).
+ * the top-level `defaults` key (same shape as a `.band-sidepanel/config.json`).
  */
 export async function loadUserDefaults(): Promise<BandConfig | null> {
   const settingsPath = path.join(os.homedir(), ".band-sidepanel", "settings.json");
@@ -89,7 +89,7 @@ export async function loadEffectiveConfig(
 ): Promise<BandConfig | null> {
   let projectConfig = await loadConfig(workspacePath);
   // Fall back to the main repo path when the worktree has no config
-  // (e.g. .sidepanel/config.json is .gitignored so new worktrees don't contain it).
+  // (e.g. .band-sidepanel/config.json is .gitignored so new worktrees don't contain it).
   if (!projectConfig && projectPath && projectPath !== workspacePath) {
     projectConfig = await loadConfig(projectPath);
   }

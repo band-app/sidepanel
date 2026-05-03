@@ -32,7 +32,7 @@ focus management. Single Tauri app — no monorepo.
 ## VS Code extension
 
 `extensions/vscode/` is a companion extension that auto-creates terminals
-from `.sidepanel/config.json` when a worktree opens in VS Code or Cursor. Build
+from `.band-sidepanel/config.json` when a worktree opens in VS Code or Cursor. Build
 deps (esbuild, @types/vscode, etc.) are declared at the **repo root** —
 the extension's own `package.json` is a manifest only (no scripts, no
 devDependencies). This keeps a single `node_modules` for the whole repo.

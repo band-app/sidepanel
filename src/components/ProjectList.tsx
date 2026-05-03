@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { api, type Project } from "../api/tauri";
+import { ChevronRight, MoreVertical, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { api, type Project } from "@/api/tauri";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { toWorkspaceId, WorktreeList } from "./WorktreeList";
 
 interface Props {
@@ -10,17 +19,29 @@ interface Props {
 }
 
 export function ProjectList({ projects, activeWorkspace, onProjectsChanged, onError }: Props) {
-  // Auto-expand a project that owns the active workspace so the user always
-  // sees what's currently focused without having to click.
-  const initiallyExpanded = activeWorkspace
-    ? projects.find((p) => activeWorkspace.startsWith(`${p.name}-`))?.id
-    : undefined;
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(initiallyExpanded ? [initiallyExpanded] : []),
-  );
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(projects.map((p) => p.id)));
+
+  // Newly added projects should also start expanded.
+  useEffect(() => {
+    setExpanded((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const p of projects) {
+        if (!next.has(p.id)) {
+          next.add(p.id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [projects]);
 
   if (projects.length === 0) {
-    return <p className="muted">No projects yet. Click "Add project" below to choose one.</p>;
+    return (
+      <p className="text-muted-foreground text-xs">
+        No projects yet. Click "Add project" below to choose one.
+      </p>
+    );
   }
 
   const toggle = (id: string) => {
@@ -50,34 +71,57 @@ export function ProjectList({ projects, activeWorkspace, onProjectsChanged, onEr
   };
 
   return (
-    <ul className="project-list">
+    <ul className="list-none m-0 p-0">
       {projects.map((p) => {
         const isOpen = expanded.has(p.id);
-        const ownsActive = activeWorkspace?.startsWith(`${p.name}-`);
+        const ownsActive = activeWorkspace?.startsWith(`${p.name}-`) ?? false;
         return (
-          <li key={p.id} className="project">
-            <div className={`project-row${ownsActive ? " owns-active" : ""}`}>
-              <button
+          <li key={p.id} className="mb-0.5">
+            <div className="group flex items-center gap-1 rounded-md">
+              <Button
                 type="button"
-                className="project-toggle"
+                variant="ghost"
+                size="sm"
                 onClick={() => toggle(p.id)}
                 aria-expanded={isOpen}
                 title={p.path}
+                className="h-9 flex-1 min-w-0 justify-start gap-1.5 px-2 py-1.5 font-medium text-foreground hover:bg-accent/60"
               >
-                <span className={`chevron${isOpen ? " open" : ""}`} aria-hidden="true">
-                  ▸
+                <ChevronRight
+                  className={cn(
+                    "size-3.5 shrink-0 text-muted-foreground transition-transform duration-100",
+                    isOpen && "rotate-90",
+                  )}
+                  aria-hidden="true"
+                />
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap min-w-0 text-[15px]">
+                  {p.name}
                 </span>
-                <span className="project-name">{p.name}</span>
-              </button>
-              <button
-                type="button"
-                className="project-remove"
-                onClick={() => remove(p.id, p.name)}
-                aria-label={`Remove ${p.name}`}
-                title="Remove from side panel"
-              >
-                ×
-              </button>
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`More actions for ${p.name}`}
+                    title="More actions"
+                    className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
+                  >
+                    <MoreVertical className="size-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={() => remove(p.id, p.name)}
+                    className="text-[14px] py-2 px-3 gap-2.5"
+                  >
+                    <Trash2 className="size-[18px]" />
+                    Remove project
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {isOpen ? (
               <WorktreeList
@@ -88,8 +132,11 @@ export function ProjectList({ projects, activeWorkspace, onProjectsChanged, onEr
               />
             ) : ownsActive && activeWorkspace ? (
               // Compact preview when collapsed but holds the active workspace.
-              <p className="indent muted active-hint">
-                active: <code>{deriveBranch(p.name, activeWorkspace)}</code>
+              <p className="pl-[26px] mt-0.5 text-[12px] text-neutral-400">
+                active:{" "}
+                <code className="font-mono text-[13px]">
+                  {deriveBranch(p.name, activeWorkspace)}
+                </code>
               </p>
             ) : null}
           </li>

@@ -25,7 +25,21 @@
         "transparent": false,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": 13, "y": 16 },
+        "trafficLightPosition": { "x": 13, "y": 17 },
+        "dragDropEnabled": false
+      },
+      {
+        "label": "settings",
+        "title": "Settings",
+        "width": 760,
+        "height": 640,
+        "minWidth": 560,
+        "minHeight": 420,
+        "resizable": true,
+        "visible": false,
+        "focus": false,
+        "skipTaskbar": false,
+        "decorations": true,
         "dragDropEnabled": false
       }
     ],

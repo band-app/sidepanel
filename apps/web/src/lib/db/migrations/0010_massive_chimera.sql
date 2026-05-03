@@ -1,1 +1,0 @@
-ALTER TABLE `tasks` ADD `coding_agent_id` text;

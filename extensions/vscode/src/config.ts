@@ -23,7 +23,7 @@ export interface BandConfig {
 }
 
 export function getConfigPath(workspacePath: string): string {
-  return path.join(workspacePath, ".band", "config.json");
+  return path.join(workspacePath, ".band-sidepanel", "config.json");
 }
 
 export async function loadConfig(workspacePath: string): Promise<BandConfig | null> {
@@ -32,17 +32,21 @@ export async function loadConfig(workspacePath: string): Promise<BandConfig | nu
   try {
     await fs.promises.access(configPath, fs.constants.R_OK);
     const content = await fs.promises.readFile(configPath, "utf-8");
-    const config = JSON.parse(content) as BandConfig;
-
-    return config;
-  } catch (err) {
-    console.log(`[Band] Failed to load config at ${configPath}:`, err);
+    return JSON.parse(content) as BandConfig;
+  } catch {
     return null;
   }
 }
 
+/**
+ * Read user-level defaults from `~/.band-sidepanel/settings.json`.
+ *
+ * The side panel's settings file contains a flattened `extra` blob alongside
+ * the structured `projects` / `window` keys; per-project defaults live under
+ * the top-level `defaults` key (same shape as a `.band-sidepanel/config.json`).
+ */
 export async function loadUserDefaults(): Promise<BandConfig | null> {
-  const settingsPath = path.join(os.homedir(), ".band", "settings.json");
+  const settingsPath = path.join(os.homedir(), ".band-sidepanel", "settings.json");
 
   try {
     await fs.promises.access(settingsPath, fs.constants.R_OK);
@@ -52,10 +56,9 @@ export async function loadUserDefaults(): Promise<BandConfig | null> {
     if (settings?.defaults) {
       return settings.defaults as BandConfig;
     }
-
     return null;
   } catch (err) {
-    console.log(`[Band] Failed to load user defaults:`, err);
+    console.log("[Sidepanel] Failed to load user defaults:", err);
     return null;
   }
 }
@@ -74,7 +77,7 @@ export function mergeConfigs(
     return defaults;
   }
 
-  // Project apps fully replace user default apps (not merged per-element)
+  // Project apps fully replace user default apps (not merged per-element).
   return {
     apps: projectConfig.apps ?? defaults.apps,
   };
@@ -86,7 +89,7 @@ export async function loadEffectiveConfig(
 ): Promise<BandConfig | null> {
   let projectConfig = await loadConfig(workspacePath);
   // Fall back to the main repo path when the worktree has no config
-  // (e.g. .band/config.json is .gitignored so new worktrees don't contain it)
+  // (e.g. .band-sidepanel/config.json is .gitignored so new worktrees don't contain it).
   if (!projectConfig && projectPath && projectPath !== workspacePath) {
     projectConfig = await loadConfig(projectPath);
   }
@@ -101,43 +104,72 @@ export interface WorkspaceIdentity {
   projectPath: string;
 }
 
+/**
+ * Identify the side-panel project + branch the current VS Code workspace
+ * belongs to.
+ *
+ * The side panel does not persist worktree state to disk — only the project
+ * list. So we compute identity from:
+ *   1. Main worktree path via `git rev-parse --git-common-dir` (handles both
+ *      main and linked worktrees).
+ *   2. That path looked up in `~/.band-sidepanel/settings.json`'s `projects[]`.
+ *   3. The workspace's current branch from `git`.
+ *
+ * Returns null if the workspace isn't tracked by the side panel.
+ */
 export async function getBandWorktreeIdentity(
   workspacePath: string,
 ): Promise<WorkspaceIdentity | null> {
-  const statePath = path.join(os.homedir(), ".band", "state.json");
+  const mainPath = (await getGitMainWorktreePath(workspacePath)) ?? workspacePath;
 
+  const settingsPath = path.join(os.homedir(), ".band-sidepanel", "settings.json");
+  let projects: Array<{ id: string; name: string; path: string }> = [];
   try {
-    await fs.promises.access(statePath, fs.constants.R_OK);
-    const content = await fs.promises.readFile(statePath, "utf-8");
-    const state = JSON.parse(content);
-
-    if (state && Array.isArray(state.projects)) {
-      for (const project of state.projects) {
-        if (Array.isArray(project.worktrees)) {
-          for (const wt of project.worktrees) {
-            if (wt.path === workspacePath) {
-              return {
-                project: project.name,
-                branch: wt.branch,
-                workspaceId: `${project.name}-${wt.branch.replaceAll("/", "-")}`,
-                projectPath: project.path,
-              };
-            }
-          }
-        }
-      }
+    const content = await fs.promises.readFile(settingsPath, "utf-8");
+    const settings = JSON.parse(content);
+    if (settings && Array.isArray(settings.projects)) {
+      projects = settings.projects;
     }
-
-    return null;
-  } catch (err) {
-    console.log(`[Band] Failed to read state.json:`, err);
+  } catch {
     return null;
   }
+
+  const project = projects.find((p) => p.path === mainPath);
+  if (!project) {
+    return null;
+  }
+
+  let branch: string;
+  try {
+    branch = await new Promise<string>((resolve, reject) => {
+      execFile(
+        "git",
+        ["rev-parse", "--abbrev-ref", "HEAD"],
+        { cwd: workspacePath, encoding: "utf-8" },
+        (err, stdout) => (err ? reject(err) : resolve(stdout.trim())),
+      );
+    });
+  } catch {
+    return null;
+  }
+
+  if (!branch || branch === "HEAD") {
+    return null;
+  }
+
+  return {
+    project: project.name,
+    branch,
+    // Mirrors `to_workspace_id` in src-tauri/src/commands/window_focus.rs.
+    workspaceId: `${project.name}-${branch.replaceAll("/", "-")}`,
+    projectPath: project.path,
+  };
 }
 
 /**
- * Use git to find the main worktree (project root) for the given workspace.
- * Returns null if the workspace is not inside a git repo or is itself the main worktree.
+ * Find the main worktree (project root) for the given workspace via git.
+ * Returns null if the workspace isn't inside a git repo or is itself the
+ * main worktree.
  */
 export async function getGitMainWorktreePath(workspacePath: string): Promise<string | null> {
   try {
@@ -150,49 +182,12 @@ export async function getGitMainWorktreePath(workspacePath: string): Promise<str
       );
     });
 
-    // git-common-dir returns <main-repo>/.git for both main and worktrees
     const mainRepo = path.dirname(gitCommonDir);
     if (mainRepo === workspacePath) {
-      return null; // already the main worktree
+      return null;
     }
     return mainRepo;
   } catch {
-    return null;
-  }
-}
-
-export interface CodingAgentSettings {
-  type: string;
-  command?: string;
-}
-
-interface CodingAgentDefinition {
-  id: string;
-  type: string;
-  label: string;
-  command?: string;
-}
-
-export async function loadCodingAgentSettings(): Promise<CodingAgentSettings | null> {
-  const settingsPath = path.join(os.homedir(), ".band", "settings.json");
-
-  try {
-    await fs.promises.access(settingsPath, fs.constants.R_OK);
-    const content = await fs.promises.readFile(settingsPath, "utf-8");
-    const settings = JSON.parse(content);
-
-    if (settings?.codingAgents && Array.isArray(settings.codingAgents)) {
-      const agents = settings.codingAgents as CodingAgentDefinition[];
-      const defaultId = settings.defaultCodingAgent as string | undefined;
-      const agent = (defaultId ? agents.find((a) => a.id === defaultId) : undefined) ?? agents[0];
-      if (agent) {
-        return { type: agent.type, command: agent.command };
-      }
-    }
-
-    return null;
-  } catch (err) {
-    console.log(`[Band] Failed to load coding agent settings:`, err);
     return null;
   }
 }

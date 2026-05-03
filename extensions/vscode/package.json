@@ -1,9 +1,9 @@
 {
-  "name": "band-vscode",
-  "displayName": "Band - Agent Workspace Manager",
-  "description": "IDE extension for Band agent orchestration",
+  "name": "sidepanel-vscode",
+  "displayName": "Sidepanel — Workspace Setup",
+  "description": "Companion extension for Sidepanel: auto-creates terminals defined in .band-sidepanel/config.json when a worktree opens in VS Code.",
   "version": "0.1.0",
-  "publisher": "band",
+  "publisher": "band-app",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -11,28 +11,16 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:**/.band/config.json",
+    "workspaceContains:**/.band-sidepanel/config.json",
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "band.setupWorkspace",
-        "title": "Band: Setup Workspace"
+        "command": "sidepanel.setupWorkspace",
+        "title": "Sidepanel: Setup Workspace"
       }
     ]
-  },
-  "scripts": {
-    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node && npm run package",
-    "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --watch",
-    "package": "vsce package --no-dependencies --out band-vscode-0.1.0.vsix"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.0",
-    "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^3.2.1",
-    "esbuild": "^0.24.0",
-    "typescript": "^5.7.0"
   }
 }

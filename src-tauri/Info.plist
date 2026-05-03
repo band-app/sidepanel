@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Tauri merges this file with the auto-generated Info.plist (CFBundleName,
+    CFBundleIdentifier, etc. come from tauri.conf.json). The keys below are
+    what the user sees in macOS permission prompts and System Settings.
+  -->
+  <key>CFBundleDisplayName</key>
+  <string>Sidepanel</string>
+
+  <!-- Force the bundle identifier into the embedded Info.plist that Tauri
+       bakes into the dev binary. macOS keys TCC (Accessibility/Automation)
+       entries by this; without it, dev binaries fall back to path-based
+       heuristics that can match a different app's cached entry. -->
+  <key>CFBundleIdentifier</key>
+  <string>com.band-app.sidepanel</string>
+
+  <key>NSAccessibilityUsageDescription</key>
+  <string>Sidepanel uses macOS Accessibility to detect the frontmost window and to bring the IDE windows for the selected workspace to the front. Without this permission the panel can launch IDE windows but cannot focus or position them.</string>
+
+  <key>NSAppleEventsUsageDescription</key>
+  <string>Sidepanel sends AppleScript events to terminal apps (iTerm2, Ghostty, Warp) so it can lay out terminal splits for the selected workspace, and to Finder for the folder picker.</string>
+</dict>
+</plist>

@@ -1,0 +1,398 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-size: 13px;
+  background: #000;
+  color: #e6e6e6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0a0a0a;
+}
+
+/* --- Layout --- */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 36px 12px 12px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.projects-section {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.footer {
+  flex-shrink: 0;
+  padding-top: 8px;
+  border-top: 1px solid #1f1f1f;
+}
+
+/* --- Project list --- */
+
+.project-list,
+.worktree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.project {
+  margin-bottom: 2px;
+}
+
+.project-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+}
+
+.project-row.owns-active {
+  background: #1a2238;
+}
+
+.project-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  min-width: 0;
+}
+
+.project-toggle:hover {
+  background: #1a1a1a;
+}
+
+.project-row.owns-active .project-toggle:hover {
+  background: #1f2a44;
+}
+
+.project-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  display: inline-block;
+  width: 12px;
+  font-size: 10px;
+  color: #888;
+  transition: transform 0.12s ease;
+}
+
+.chevron.open {
+  transform: rotate(90deg);
+}
+
+.project-remove {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: transparent;
+  border: 0;
+  color: #666;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.project-remove:hover {
+  color: #ff8080;
+  background: #2a0e0e;
+}
+
+.indent {
+  padding-left: 26px;
+  margin: 2px 0;
+  font-size: 11px;
+}
+
+.active-hint {
+  font-size: 10px;
+  color: #6b8cce;
+}
+
+/* --- Worktree list --- */
+
+.worktree-list {
+  margin: 2px 0 6px 0;
+  padding-left: 18px;
+  border-left: 1px solid #1f1f1f;
+  margin-left: 14px;
+}
+
+.worktree-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  color: #c8c8c8;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-bottom: 1px;
+}
+
+.worktree-row:hover {
+  background: #1a1a1a;
+}
+
+.worktree-row.active {
+  background: #2a3a5e;
+  color: #ffffff;
+}
+
+.worktree-row.active:hover {
+  background: #324578;
+}
+
+.worktree-row:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.branch {
+  font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.spinner {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #555;
+  border-top-color: #ddd;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Buttons --- */
+
+.primary-button {
+  width: 100%;
+  padding: 8px 10px;
+  background: #1f1f1f;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #e6e6e6;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #262626;
+  border-color: #333;
+}
+
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.icon-button {
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #999;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.icon-button[aria-pressed="true"] {
+  background: #1a1a1a;
+  color: #e6e6e6;
+  border-color: #2a2a2a;
+}
+
+.close-button {
+  background: transparent;
+  border: 0;
+  color: #888;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 6px;
+}
+
+.close-button:hover {
+  color: #e6e6e6;
+}
+
+/* --- Settings --- */
+
+.card {
+  background: #141414;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.settings h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+  color: #999;
+  font-weight: 600;
+}
+
+.settings fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.field.row {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.field input[type="range"] {
+  width: 100%;
+  accent-color: #4a8aff;
+}
+
+.field input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  background: #0d0d0d;
+  border: 1px solid #222;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.segmented button {
+  flex: 1;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #ccc;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.segmented button.selected {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+/* --- Misc --- */
+
+.muted {
+  color: #777;
+}
+
+.block {
+  display: block;
+  margin-top: 2px;
+}
+
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #b8d4ff;
+}
+
+.error {
+  color: #ff8080;
+  background: #2a0e0e;
+  border: 1px solid #5a1c1c;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.error pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

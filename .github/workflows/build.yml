@@ -1,0 +1,155 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request_target:
+    types: [opened, reopened, labeled, synchronize]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    name: Lint, Test & Build
+    runs-on: macos-latest
+
+    # Always run on push to main / tag pushes / manual dispatch.
+    # For same-repo PRs (collaborators): run automatically.
+    # For fork PRs: only run when a maintainer adds the `ci:approved` label.
+    if: >
+      github.event_name != 'pull_request_target' ||
+      github.event.pull_request.head.repo.full_name == github.repository ||
+      contains(github.event.pull_request.labels.*.name, 'ci:approved')
+
+    env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+
+    outputs:
+      dmg: ${{ steps.bundle.outputs.dmg }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-registry-${{ runner.os }}-
+
+      - name: Cache Cargo target
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target
+          key: cargo-target-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-target-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm exec biome check .
+
+      - name: Lint (cargo fmt)
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Lint (cargo clippy)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Test
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Build VS Code extension (bundled into the .app)
+        run: pnpm build:extension
+
+      - name: Build Tauri app
+        id: bundle
+        # Pass an empty beforeBuildCommand so tauri doesn't re-run the
+        # frontend + extension builds we already did above.
+        run: |
+          pnpm tauri build --ci --config '{"build":{"beforeBuildCommand":""}}'
+          DMG=$(find src-tauri/target/release/bundle/dmg -name '*.dmg' | head -1)
+          echo "dmg=$DMG" >> "$GITHUB_OUTPUT"
+          echo "Built: $DMG"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sidepanel-${{ github.sha }}
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    runs-on: macos-latest
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download DMG
+        uses: actions/download-artifact@v4
+        with:
+          name: sidepanel-${{ github.sha }}
+          path: dist-release
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 "${{ github.ref_name }}^" 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            CHANGELOG=$(git log "${LAST_TAG}..${{ github.ref_name }}" --pretty=format:"- %s" --no-merges | grep -v "^- chore: release" || true)
+          else
+            CHANGELOG=$(git log "${{ github.ref_name }}" --pretty=format:"- %s" --no-merges | grep -v "^- chore: release" || true)
+          fi
+          {
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: dist-release/*.dmg

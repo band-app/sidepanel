@@ -85,7 +85,7 @@ Worktrees are **not** persisted — they're discovered live by running
 ## VS Code companion extension
 
 `extensions/vscode/` is a companion extension that auto-creates terminals
-defined in `.band/config.json` when a worktree opens in VS Code or Cursor.
+defined in `.sidepanel/config.json` when a worktree opens in VS Code or Cursor.
 It's bundled into the .app via `src-tauri/tauri.conf.json#bundle.resources`,
 so it ships with the side panel and doesn't need a separate install.
 

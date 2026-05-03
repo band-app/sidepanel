@@ -44,8 +44,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../extensions/vscode/dist/extension.js": "extensions/band/dist/extension.js",
-      "../extensions/vscode/package.json": "extensions/band/package.json"
+      "../extensions/vscode/dist/extension.js": "extensions/sidepanel/dist/extension.js",
+      "../extensions/vscode/package.json": "extensions/sidepanel/package.json"
     }
   },
   "plugins": {}

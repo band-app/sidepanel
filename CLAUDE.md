@@ -32,7 +32,7 @@ focus management. Single Tauri app — no monorepo.
 ## VS Code extension
 
 `extensions/vscode/` is a companion extension that auto-creates terminals
-from `.band/config.json` when a worktree opens in VS Code or Cursor. Build
+from `.sidepanel/config.json` when a worktree opens in VS Code or Cursor. Build
 deps (esbuild, @types/vscode, etc.) are declared at the **repo root** —
 the extension's own `package.json` is a manifest only (no scripts, no
 devDependencies). This keeps a single `node_modules` for the whole repo.
@@ -44,11 +44,11 @@ Build pipeline:
 - `pnpm tauri:build` runs `build:extension` first, then `tauri build`.
 - `src-tauri/tauri.conf.json#bundle.resources` ships
   `extensions/vscode/dist/extension.js` + `extensions/vscode/package.json`
-  inside the .app bundle at `Contents/Resources/extensions/band/`.
+  inside the .app bundle at `Contents/Resources/extensions/sidepanel/`.
 
 The extension reads `~/.band-sidepanel/settings.json` for the project list
 and the optional top-level `defaults` key (per-project app/terminal
-defaults). It does **not** touch `~/.band/` (the old web-server config).
+defaults).
 
 ## Testing strategy
 

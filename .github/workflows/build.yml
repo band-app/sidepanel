@@ -83,6 +83,12 @@ jobs:
       - name: Lint (cargo fmt)
         run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 
+      # Build the VS Code extension before any cargo step that runs
+      # build.rs — Tauri's build script validates bundle.resources paths,
+      # and `extensions/vscode/dist/extension.js` is one of them.
+      - name: Build VS Code extension (bundled into the .app)
+        run: pnpm build:extension
+
       - name: Lint (cargo clippy)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
 
@@ -91,9 +97,6 @@ jobs:
 
       - name: Build frontend
         run: pnpm build
-
-      - name: Build VS Code extension (bundled into the .app)
-        run: pnpm build:extension
 
       - name: Build Tauri app
         id: bundle

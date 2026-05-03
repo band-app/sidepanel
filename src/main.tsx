@@ -12,6 +12,4 @@ if (!root) {
 
 const isSettingsWindow = getCurrentWindow().label === "settings";
 
-createRoot(root).render(
-  <StrictMode>{isSettingsWindow ? <SettingsWindow /> : <App />}</StrictMode>,
-);
+createRoot(root).render(<StrictMode>{isSettingsWindow ? <SettingsWindow /> : <App />}</StrictMode>);

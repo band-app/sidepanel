@@ -46,10 +46,7 @@ export function Settings({ initial, onSettingsChanged, onError }: Props) {
     <fieldset disabled={disabled} className="border-0 p-0 m-0 disabled:opacity-60">
       <h2 className="text-lg font-semibold mb-4">General</h2>
       <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <SettingsRow
-          title="Screen edge"
-          description="Which side of the screen the panel docks to."
-        >
+        <SettingsRow title="Screen edge" description="Which side of the screen the panel docks to.">
           <ToggleGroup
             type="single"
             value={edge}
@@ -72,11 +69,7 @@ export function Settings({ initial, onSettingsChanged, onError }: Props) {
           </ToggleGroup>
         </SettingsRow>
 
-        <SettingsRow
-          title="Width"
-          description="Panel width in pixels."
-          htmlFor="width-slider"
-        >
+        <SettingsRow title="Width" description="Panel width in pixels." htmlFor="width-slider">
           <div className="flex items-center gap-3 min-w-[220px]">
             <Slider
               id="width-slider"

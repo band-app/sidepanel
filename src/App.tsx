@@ -1,15 +1,16 @@
 import { listen } from "@tauri-apps/api/event";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { Settings as SettingsIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { api, type Project, type PublicSettings, type WindowSettings } from "./api/tauri";
-import { AddProjectButton } from "./components/AddProjectButton";
-import { ProjectList } from "./components/ProjectList";
-import { Settings } from "./components/Settings";
+import { api, type Project } from "@/api/tauri";
+import { AddProjectButton } from "@/components/AddProjectButton";
+import { ProjectList } from "@/components/ProjectList";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 
 export function App() {
   const [projects, setProjects] = useState<Project[] | null>(null);
-  const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadProjects = useCallback(() => {
@@ -19,14 +20,8 @@ export function App() {
       .catch((e) => setError(`list_projects: ${String(e)}`));
   }, []);
 
-  // Initial load + active-workspace event subscription.
   useEffect(() => {
     loadProjects();
-
-    api
-      .getSettings()
-      .then(setSettings)
-      .catch((e) => setError(`get_settings: ${String(e)}`));
 
     api
       .getActiveWorkspace()
@@ -41,38 +36,42 @@ export function App() {
     };
   }, [loadProjects]);
 
-  const onSettingsChanged = useCallback((window: WindowSettings) => {
-    setSettings({ window });
-  }, []);
+  const openSettings = async () => {
+    try {
+      const win = await WebviewWindow.getByLabel("settings");
+      if (win) {
+        await win.show();
+        await win.setFocus();
+      }
+    } catch (e) {
+      setError(`open settings window: ${String(e)}`);
+    }
+  };
 
   return (
-    <main className="panel">
-      <header className="header">
-        <h1>Sidepanel</h1>
-        <button
+    <main className="flex flex-col gap-2.5 h-full overflow-hidden pt-12 px-3 pb-3">
+      <div
+        aria-hidden="true"
+        className="absolute top-0 left-0 right-0 h-12 border-b-2 border-border pointer-events-none"
+      />
+      <div className="absolute top-1 right-2 z-10 flex items-center gap-1">
+        <Button
           type="button"
-          className="icon-button"
-          onClick={() => setShowSettings((v) => !v)}
-          aria-label="Toggle settings"
-          aria-pressed={showSettings}
+          variant="ghost"
+          size="icon-lg"
+          onClick={openSettings}
+          aria-label="Open settings"
           title="Settings"
+          className="text-muted-foreground"
         >
-          ⚙
-        </button>
-      </header>
+          <SettingsIcon className="size-5" />
+        </Button>
+        <AddProjectButton onAdded={loadProjects} onError={setError} />
+      </div>
 
-      {showSettings && settings ? (
-        <Settings
-          initial={settings.window}
-          onSettingsChanged={onSettingsChanged}
-          onError={setError}
-          onClose={() => setShowSettings(false)}
-        />
-      ) : null}
-
-      <section className="projects-section">
+      <section className="flex-1 overflow-y-auto -mx-1 px-1">
         {projects === null ? (
-          <p className="muted">loading projects…</p>
+          <p className="text-muted-foreground text-xs">loading projects…</p>
         ) : (
           <ProjectList
             projects={projects}
@@ -83,14 +82,10 @@ export function App() {
         )}
       </section>
 
-      <footer className="footer">
-        <AddProjectButton onAdded={loadProjects} onError={setError} />
-      </footer>
-
       {error ? (
-        <div
-          className="error"
-          role="alert"
+        <Alert
+          variant="destructive"
+          className="cursor-pointer shrink-0 py-2 px-3"
           onClick={() => setError(null)}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -98,9 +93,13 @@ export function App() {
             }
           }}
         >
-          <pre>{error}</pre>
-          <small className="muted">click to dismiss</small>
-        </div>
+          <AlertDescription className="gap-0.5">
+            <pre className="m-0 whitespace-pre-wrap break-all text-[11px] font-mono text-destructive">
+              {error}
+            </pre>
+            <small className="text-muted-foreground text-[10px]">click to dismiss</small>
+          </AlertDescription>
+        </Alert>
       ) : null}
     </main>
   );

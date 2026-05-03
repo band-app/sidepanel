@@ -13,6 +13,9 @@
     }
   },
   "css": {
+    "parser": {
+      "cssModules": false
+    },
     "linter": {
       "enabled": true
     }
@@ -58,7 +61,9 @@
       "!**/dist",
       "!**/build",
       "!**/target",
-      "!**/src-tauri/gen"
+      "!**/src-tauri/gen",
+      "!src/styles.css",
+      "!src/components/ui"
     ]
   }
 }

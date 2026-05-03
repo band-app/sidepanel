@@ -1,5 +1,8 @@
+import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, type Worktree } from "../api/tauri";
+import { api, type Worktree } from "@/api/tauri";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Workspace IDs are built the same way the Rust side does it (see
 // `to_workspace_id` in window_focus.rs): "<projectName>-<branch with / -> ->".
@@ -44,11 +47,17 @@ export function WorktreeList({ projectId, projectName, activeWorkspace, onError 
   }, [projectId, onError]);
 
   if (worktrees === null) {
-    return <p className="muted indent">loading worktrees…</p>;
+    return (
+      <p className="pl-[26px] mt-0.5 mb-1.5 text-[13px] text-muted-foreground">
+        loading worktrees…
+      </p>
+    );
   }
 
   if (worktrees.length === 0) {
-    return <p className="muted indent">no worktrees</p>;
+    return (
+      <p className="pl-[26px] mt-0.5 mb-1.5 text-[13px] text-muted-foreground">no worktrees</p>
+    );
   }
 
   const onFocus = async (workspaceId: string) => {
@@ -63,22 +72,33 @@ export function WorktreeList({ projectId, projectName, activeWorkspace, onError 
   };
 
   return (
-    <ul className="worktree-list">
+    <ul className="list-none m-0 mt-0.5 mb-1.5 ml-[14px] pl-[18px] border-l border-border/60">
       {worktrees.map((wt) => {
         const wsId = toWorkspaceId(projectName, wt.branch);
         const isActive = wsId === activeWorkspace;
+        const isBusy = busy === wsId;
         return (
-          <li key={wt.path}>
-            <button
+          <li key={wt.path} className="mb-px">
+            <Button
               type="button"
-              className={`worktree-row${isActive ? " active" : ""}`}
+              variant="ghost"
+              size="sm"
               onClick={() => onFocus(wsId)}
-              disabled={busy === wsId}
+              disabled={isBusy}
               title={wt.path}
+              className={cn(
+                "h-8 w-full justify-between px-2 py-1 text-[14px] font-normal text-foreground/80 hover:bg-accent/60",
+                isActive && "border border-neutral-400 text-foreground",
+                isBusy && "cursor-progress",
+              )}
             >
-              <span className="branch">{wt.branch}</span>
-              {busy === wsId ? <span className="spinner" aria-hidden="true" /> : null}
-            </button>
+              <span className="font-mono text-[13px] overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+                {wt.branch}
+              </span>
+              {isBusy ? (
+                <Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />
+              ) : null}
+            </Button>
           </li>
         );
       })}

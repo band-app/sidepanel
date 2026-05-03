@@ -190,9 +190,24 @@ fn match_cwds_to_workspace(cwds: &[PathBuf], app_state: &state::AppState) -> Opt
     }
 }
 
-fn set_active_workspace(active_state: &std::sync::Mutex<Option<String>>, workspace_id: &str) {
-    if let Ok(mut guard) = active_state.lock() {
-        *guard = Some(workspace_id.to_string());
+fn set_active_workspace(
+    app_handle: &tauri::AppHandle,
+    active_state: &std::sync::Mutex<Option<String>>,
+    workspace_id: &str,
+) {
+    let changed = if let Ok(mut guard) = active_state.lock() {
+        let new_value = Some(workspace_id.to_string());
+        if *guard == new_value {
+            false
+        } else {
+            *guard = new_value;
+            true
+        }
+    } else {
+        false
+    };
+    if changed {
+        let _ = app_handle.emit("active-workspace", workspace_id.to_string());
     }
 }
 
@@ -447,8 +462,7 @@ pub fn start_focus_polling(app_handle: tauri::AppHandle, enabled: Arc<AtomicBool
             if let Some(ws_id) = detect_frontmost_workspace(&cached) {
                 if last_active.as_deref() != Some(ws_id.as_str()) {
                     last_active = Some(ws_id.clone());
-                    set_active_workspace(&active_state, &ws_id);
-                    let _ = app_handle.emit("active-workspace", ws_id.clone());
+                    set_active_workspace(&app_handle, &active_state, &ws_id);
                 }
                 if !panel_raised {
                     let _ = app_handle.run_on_main_thread(|| unsafe {
@@ -583,7 +597,7 @@ pub fn workspace_focus(
         }
     }
 
-    set_active_workspace(&active_state.0, &ws_id);
+    set_active_workspace(&app_handle, &active_state.0, &ws_id);
 
     Ok(())
 }
@@ -608,6 +622,7 @@ pub fn get_active_workspace(
 
 #[tauri::command]
 pub fn detect_active_workspace(
+    app_handle: tauri::AppHandle,
     active_state: tauri::State<'_, ActiveWorkspaceState>,
     project_cache: tauri::State<'_, ProjectCache>,
 ) -> Result<Option<String>, String> {
@@ -615,7 +630,7 @@ pub fn detect_active_workspace(
         return Ok(None);
     };
     if let Some(ws_id) = detect_frontmost_workspace(&cached) {
-        set_active_workspace(&active_state.0, &ws_id);
+        set_active_workspace(&app_handle, &active_state.0, &ws_id);
         return Ok(Some(ws_id));
     }
     Ok(None)
